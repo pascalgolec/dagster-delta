@@ -81,6 +81,7 @@ class _DeltaTableIOManagerResourceConfig(TypedDict):
     table_config: NotRequired[dict[str, str]]
     custom_metadata: NotRequired[dict[str, str]]
     writer_properties: NotRequired[dict[str, str]]
+    commit_properties: NotRequired[dict[str, str]]
     parquet_read_options: NotRequired[dict[str, Any]]
 
 
@@ -146,7 +147,7 @@ class DeltaLakeIOManager(ConfigurableIOManagerFactory):
         description="If set to 'overwrite', allows replacing the schema of the table. Set to 'merge' to merge with existing schema.",
     )
     writer_engine: WriterEngine = Field(  # type: ignore
-        default=WriterEngine.pyarrow.value,
+        default=WriterEngine.rust.value,
         description="Engine passed to write_deltalake.",
     )
 
@@ -184,6 +185,10 @@ class DeltaLakeIOManager(ConfigurableIOManagerFactory):
         default=None,
         description="Writer properties passed to the rust engine writer.",
     )
+    commit_properties: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Commit properties, Controls the behaviour of the commit.",
+    )
     parquet_read_options: Optional[dict[str, Any]] = Field(
         default=None,
         description="Parquet read options, to be passed to pyarrow.",
@@ -199,7 +204,7 @@ class DeltaLakeIOManager(ConfigurableIOManagerFactory):
         return None
 
     def create_io_manager(self, context) -> DbIOManager:  # noqa: D102, ANN001, ARG002
-        self.storage_options.dict()
+        self.storage_options.model_dump()
         return DbIOManagerFixed(
             db_client=DeltaLakeDbClient(),
             database="deltalake",

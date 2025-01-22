@@ -20,7 +20,7 @@ from dagster._core.definitions.time_window_partitions import (
     TimeWindowPartitionsDefinition,
 )
 from dagster._core.storage.db_io_manager import DbTypeHandler, TablePartitionDimension, TableSlice
-from deltalake import DeltaTable, WriterProperties, write_deltalake
+from deltalake import CommitProperties, DeltaTable, WriterProperties, write_deltalake
 from deltalake.exceptions import TableNotFoundError
 from deltalake.schema import Field as DeltaField
 from deltalake.schema import PrimitiveType, Schema, _convert_pa_schema_to_delta
@@ -69,9 +69,10 @@ def _create_predicate(
 
 def _merge_execute(
     dt: DeltaTable,
-    reader: pa.RecordBatchReader,
+    data: Union[pa.RecordBatchReader, pa.Table],
     merge_config: dict[str, Any],
     writer_properties: Optional[WriterProperties],
+    commit_properties: Optional[CommitProperties],
     custom_metadata: Optional[dict[str, str]],
     delta_params: dict[str, Any],
     merge_predicate_from_metadata: Optional[str],
@@ -98,12 +99,13 @@ def _merge_execute(
         logger.debug("Using explicit MERGE partition predicate: \n%s", predicate)
 
     merger = dt.merge(
-        source=reader,
+        source=data,
         predicate=predicate,
         source_alias=merge_config.get("source_alias"),
         target_alias=target_alias,
         error_on_type_mismatch=error_on_type_mismatch,
         writer_properties=writer_properties,
+        commit_properties=commit_properties,
         custom_metadata=custom_metadata,
         **delta_params,
     )
@@ -127,7 +129,7 @@ class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):  # noqa: D101
         pass
 
     @abstractmethod
-    def to_arrow(self, obj: T) -> tuple[pa.RecordBatchReader, dict[str, Any]]:
+    def to_arrow(self, obj: T) -> tuple[ArrowTypes, dict[str, Any]]:
         """Abstract method to convert type to arrow"""
         pass
 
@@ -146,28 +148,37 @@ class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):  # noqa: D101
         """Stores pyarrow types in Delta table."""
         logger = logging.getLogger()
         logger.setLevel("DEBUG")
-        metadata = context.metadata or {}
-        merge_predicate_from_metadata = metadata.get("merge_predicate")
-        additional_table_config = metadata.get("table_configuration", {})
+        definition_metadata = context.definition_metadata or {}
+        merge_predicate_from_metadata = definition_metadata.get("merge_predicate")
+        additional_table_config = definition_metadata.get("table_configuration", {})
         if connection.table_config is not None:
             table_config = additional_table_config | connection.table_config
         else:
             table_config = additional_table_config
         resource_config = context.resource_config or {}
         object_stats = self.get_output_stats(obj)
-        reader, delta_params = self.to_arrow(obj=obj)
-        delta_schema = Schema.from_pyarrow(_convert_pa_schema_to_delta(reader.schema))
+        data, delta_params = self.to_arrow(obj=obj)
+        delta_schema = Schema.from_pyarrow(_convert_pa_schema_to_delta(data.schema))
         resource_config = cast(_DeltaTableIOManagerResourceConfig, context.resource_config)
         engine = resource_config.get("writer_engine")
-        save_mode = metadata.get("mode")
+        save_mode = definition_metadata.get("mode")
         main_save_mode = resource_config.get("mode")
-        custom_metadata = metadata.get("custom_metadata") or resource_config.get("custom_metadata")
-        schema_mode = metadata.get("schema_mode") or resource_config.get(
+        custom_metadata = definition_metadata.get("custom_metadata") or resource_config.get(
+            "custom_metadata",
+        )
+        schema_mode = definition_metadata.get("schema_mode") or resource_config.get(
             "schema_mode",
         )
         writer_properties = resource_config.get("writer_properties")
         writer_properties = (
             WriterProperties(**writer_properties) if writer_properties is not None else None  # type: ignore
+        )
+
+        commit_properties = definition_metadata.get("commit_properties") or resource_config.get(
+            "commit_properties",
+        )
+        commit_properties = (
+            CommitProperties(**commit_properties) if commit_properties is not None else None  # type: ignore
         )
         merge_config = resource_config.get("merge_config")
 
@@ -210,7 +221,7 @@ class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):  # noqa: D101
                 logger.debug("Using explicit partition_filter: \n%s", partition_filters)
             write_deltalake(  # type: ignore
                 table_or_uri=connection.table_uri,
-                data=reader,
+                data=data,
                 storage_options=connection.storage_options,
                 mode=main_save_mode,
                 partition_filters=partition_filters,
@@ -221,12 +232,13 @@ class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):  # noqa: D101
                 configuration=table_config,
                 custom_metadata=custom_metadata,
                 writer_properties=writer_properties,
+                commit_properties=commit_properties,
                 **delta_params,
             )
         elif main_save_mode == "create_or_replace":
             DeltaTable.create(
                 table_uri=connection.table_uri,
-                schema=_convert_pa_schema_to_delta(reader.schema, **delta_params),
+                schema=_convert_pa_schema_to_delta(data.schema, **delta_params),
                 mode="overwrite",
                 partition_by=partition_columns,
                 configuration=table_config,
@@ -244,7 +256,7 @@ class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):  # noqa: D101
                 logger.debug("Creating a DeltaTable first before merging.")
                 dt = DeltaTable.create(
                     table_uri=connection.table_uri,
-                    schema=_convert_pa_schema_to_delta(reader.schema, **delta_params),
+                    schema=_convert_pa_schema_to_delta(data.schema, **delta_params),
                     partition_by=partition_columns,
                     configuration=table_config,
                     storage_options=connection.storage_options,
@@ -252,9 +264,10 @@ class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):  # noqa: D101
                 )
             merge_stats = _merge_execute(
                 dt,
-                reader,
+                data,
                 merge_config,
                 writer_properties=writer_properties,
+                commit_properties=commit_properties,
                 custom_metadata=custom_metadata,
                 delta_params=delta_params,
                 merge_predicate_from_metadata=merge_predicate_from_metadata,
@@ -265,7 +278,7 @@ class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):  # noqa: D101
         try:
             stats = _get_partition_stats(dt=dt, partition_filters=partition_filters)
         except Exception as e:
-            context.log.warn(f"error while computing table stats: {e}")
+            context.log.warning(f"error while computing table stats: {e}")
             stats = {}
 
         output_metadata = {
@@ -273,7 +286,7 @@ class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):  # noqa: D101
                 TableSchema(
                     columns=[
                         TableColumn(name=name, type=str(dtype))
-                        for name, dtype in zip(reader.schema.names, reader.schema.types)
+                        for name, dtype in zip(data.schema.names, data.schema.types)
                     ],
                 ),
             ),
@@ -323,9 +336,7 @@ class DeltaLakePyArrowTypeHandler(DeltalakeBaseArrowTypeHandler[ArrowTypes]):  #
             return obj.read_all()
         return obj
 
-    def to_arrow(self, obj: ArrowTypes) -> tuple[pa.RecordBatchReader, dict[str, Any]]:  # noqa: D102
-        if isinstance(obj, pa.Table):
-            return obj.to_reader(), {}
+    def to_arrow(self, obj: ArrowTypes) -> tuple[ArrowTypes, dict[str, Any]]:  # noqa: D102
         if isinstance(obj, ds.Dataset):
             return obj.scanner().to_reader(), {}
         return obj, {}
@@ -560,7 +571,7 @@ def extract_date_format_from_partition_definition(
     if isinstance(context, InputContext):
         if context.has_asset_partitions:
             if context.upstream_output is not None:
-                partition_expr = context.upstream_output.metadata["partition_expr"]  # type: ignore
+                partition_expr = context.upstream_output.definition_metadata["partition_expr"]  # type: ignore
                 partitions_definition = context.asset_partitions_def
             else:
                 raise ValueError(
@@ -570,8 +581,11 @@ def extract_date_format_from_partition_definition(
             return None
     elif isinstance(context, OutputContext):
         if context.has_asset_partitions:
-            if context.metadata is not None and "partition_expr" in context.metadata:
-                partition_expr = context.metadata["partition_expr"]
+            if (
+                context.definition_metadata is not None
+                and "partition_expr" in context.definition_metadata
+            ):
+                partition_expr = context.definition_metadata["partition_expr"]
             else:
                 raise ValueError(
                     "'partition_expr' should have been set in the metadata of the incoming asset since it has a partition definition.",

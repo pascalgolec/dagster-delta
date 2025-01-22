@@ -1,4 +1,5 @@
 import os
+import warnings
 from datetime import datetime
 
 import polars as pl
@@ -8,6 +9,7 @@ from dagster import (
     AssetIn,
     DailyPartitionsDefinition,
     DynamicPartitionsDefinition,
+    ExperimentalWarning,
     MultiPartitionKey,
     MultiPartitionsDefinition,
     Out,
@@ -24,6 +26,8 @@ from dagster_delta.io_manager import WriteMode
 from deltalake import DeltaTable
 
 from dagster_delta_polars import DeltaLakePolarsIOManager
+
+warnings.filterwarnings("ignore", category=ExperimentalWarning)
 
 
 @pytest.fixture()
@@ -105,6 +109,7 @@ def test_deltalake_io_manager_with_assets(
     asset1_path,
     asset2_path,
 ):
+    warnings.filterwarnings("ignore", category=ExperimentalWarning)
     resource_defs = {"io_manager": io_manager}
 
     # materialize asset twice to ensure that tables get properly deleted
@@ -173,6 +178,7 @@ def b_plus_one_columns_lazy(b_df_lazy: pl.LazyFrame) -> pl.LazyFrame:
     ],
 )
 def test_loading_columns(tmp_path, io_manager, asset1, asset2, asset1_path, asset2_path):
+    warnings.filterwarnings("ignore", category=ExperimentalWarning)
     resource_defs = {"io_manager": io_manager}
 
     # materialize asset twice to ensure that tables get properly deleted
@@ -238,12 +244,12 @@ def daily_partitioned(context: AssetExecutionContext) -> pl.DataFrame:
     metadata={"partition_expr": "time"},
     config_schema={"value": str},
 )
-def daily_partitioned_lazy(context) -> pl.LazyFrame:
+def daily_partitioned_lazy(context: AssetExecutionContext) -> pl.LazyFrame:
     partition = datetime.strptime(
-        context.asset_partition_key_for_output(),
+        context.partition_key,
         DELTA_DATE_FORMAT,
     ).date()
-    value = context.op_config["value"]
+    value = context.op_execution_context.op_config["value"]
 
     return pl.LazyFrame(
         {
@@ -308,6 +314,7 @@ def load_partitioned(daily_partitioned: pl.DataFrame) -> pl.DataFrame:
 
 
 def test_load_partitioned_asset(io_manager):
+    warnings.filterwarnings("ignore", category=ExperimentalWarning)
     resource_defs = {"io_manager": io_manager}
 
     res = materialize(

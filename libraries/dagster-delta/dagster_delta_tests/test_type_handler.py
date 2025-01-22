@@ -1,4 +1,5 @@
 import os
+import warnings
 from datetime import datetime
 
 import pyarrow as pa
@@ -9,6 +10,7 @@ from dagster import (
     AssetKey,
     DailyPartitionsDefinition,
     DynamicPartitionsDefinition,
+    ExperimentalWarning,
     MultiPartitionKey,
     MultiPartitionsDefinition,
     Out,
@@ -24,6 +26,8 @@ from dagster._check import CheckError
 from deltalake import DeltaTable
 
 from dagster_delta import DELTA_DATE_FORMAT, DeltaLakePyarrowIOManager, LocalConfig
+
+warnings.filterwarnings("ignore", category=ExperimentalWarning)
 
 
 @pytest.fixture()
@@ -77,6 +81,7 @@ def b_plus_one(b_df: pa.Table) -> pa.Table:
 
 
 def test_deltalake_io_manager_with_assets(tmp_path, io_manager):
+    warnings.filterwarnings("ignore", category=ExperimentalWarning)
     resource_defs = {"io_manager": io_manager}
 
     # materialize asset twice to ensure that tables get properly deleted
@@ -130,6 +135,7 @@ def b_plus_one_columns(b_df: pa.Table) -> pa.Table:
 
 
 def test_loading_columns(tmp_path, io_manager):
+    warnings.filterwarnings("ignore", category=ExperimentalWarning)
     resource_defs = {"io_manager": io_manager}
 
     # materialize asset twice to ensure that tables get properly deleted
@@ -236,6 +242,7 @@ def load_partitioned(daily_partitioned: pa.Table) -> pa.Table:
 
 
 def test_load_partitioned_asset(io_manager):
+    warnings.filterwarnings("ignore", category=ExperimentalWarning)
     resource_defs = {"io_manager": io_manager}
 
     res = materialize(
