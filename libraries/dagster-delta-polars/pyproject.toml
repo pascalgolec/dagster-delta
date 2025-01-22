@@ -1,11 +1,12 @@
 [project]
 name = "dagster-delta-polars"
-version = "0.1.5"
+version = "0.2.0"
 description = "Polars deltalake IO Managers for Dagster with optional LakeFS support"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "dagster-delta"
+    "dagster-delta",
+    "Deprecated",
 ]
 authors = [
     {name = "Ion Koutsouris", email = "15728914+ion-elgreco@users.noreply.github.com"},

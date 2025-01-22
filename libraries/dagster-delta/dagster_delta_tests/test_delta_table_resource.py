@@ -18,7 +18,11 @@ def test_resource(tmp_path):
 
     @asset
     def create_table(delta_table: DeltaTableResource):
-        write_deltalake(delta_table.url, data, storage_options=delta_table.storage_options.dict())
+        write_deltalake(
+            delta_table.url,
+            data,
+            storage_options=delta_table.storage_options.model_dump(),
+        )
 
     @asset
     def read_table(delta_table: DeltaTableResource):
@@ -46,11 +50,15 @@ def test_resource_versioned(tmp_path):
 
     @asset
     def create_table(delta_table: DeltaTableResource):
-        write_deltalake(delta_table.url, data, storage_options=delta_table.storage_options.dict())
         write_deltalake(
             delta_table.url,
             data,
-            storage_options=delta_table.storage_options.dict(),
+            storage_options=delta_table.storage_options.model_dump(),
+        )
+        write_deltalake(
+            delta_table.url,
+            data,
+            storage_options=delta_table.storage_options.model_dump(),
             mode="append",
         )
 

@@ -3,7 +3,6 @@ import random
 import time
 from collections.abc import Callable, Generator, Sequence
 from typing import Optional, Union
-from urllib.parse import quote
 
 from dagster import MetadataValue, OutputContext
 from dagster._core.errors import DagsterExecutionHandleOutputError
@@ -13,10 +12,13 @@ from dagster._core.storage.db_io_manager import (
 )
 from dagster_delta.io_manager import TableConnection
 from deltalake._internal import DeltaError
+from deprecated import deprecated
 from lakefs.exceptions import ConflictException
 
 from dagster_delta_polars import DeltaLakePolarsIOManager, DeltaLakePolarsTypeHandler
-from dagster_delta_polars.deltalake_polars_type_handler import PolarsTypes
+from dagster_delta_polars.deltalake_polars_type_handler import (
+    PolarsTypes,
+)
 from dagster_delta_polars.lakefs_io.lakefs_client_resource import LakeFSClient
 
 
@@ -68,20 +70,6 @@ def has_items(generator: Generator) -> bool:
         return True
     except StopIteration:
         return False
-
-
-def convert_s3_uri_to_lakefs_link(s3_uri: str, lakefs_base_url: str) -> str:
-    """Convert an S3 uri to a link to lakefs"""
-    s3_uri = s3_uri[len("s3://") :]
-    parts = s3_uri.split("/", 2)
-    if len(parts) < 3:
-        return "https://error-invalid-s3-uri-format"
-    repository = parts[0]
-    ref = parts[1]
-    path = parts[2]
-    encoded_path = quote(path + "/")
-    https_url = f"{lakefs_base_url.rstrip('/')}/repositories/{repository}/objects?ref={ref}&path={encoded_path}"
-    return https_url
 
 
 class DeltaLakePolarsLakeFSTypeHandler(DeltaLakePolarsTypeHandler):
@@ -153,12 +141,16 @@ class DeltaLakePolarsLakeFSTypeHandler(DeltaLakePolarsTypeHandler):
         metadata["table_uri"] = MetadataValue.path(connection.table_uri)
         if self.lakefs_base_url is not None:
             metadata["lakefs_link"] = MetadataValue.url(
-                convert_s3_uri_to_lakefs_link(connection.table_uri, self.lakefs_base_url),
+                _convert_s3_uri_to_lakefs_link(connection.table_uri, self.lakefs_base_url),
             )
 
         context.add_output_metadata(metadata)
 
 
+@deprecated(
+    version="0.2.0",
+    reason="deltalake supports lakefs natively since v0.24+, use lakefs:// uri on DeltaLakePolarsIOManager",
+)
 class DeltaLakePolarsLakeFSIOManager(DeltaLakePolarsIOManager):
     """Extends functionality of DeltaLakePolarsIOManager with lakefs branching"""
 
@@ -175,3 +167,19 @@ class DeltaLakePolarsLakeFSIOManager(DeltaLakePolarsIOManager):
                 lakefs_base_url=self.lakefs_base_url,
             ),
         ]
+
+
+def _convert_s3_uri_to_lakefs_link(s3_uri: str, lakefs_base_url: str) -> str:
+    """Convert an S3 uri to a link to lakefs"""
+    from urllib.parse import quote
+
+    s3_uri = s3_uri[len("s3://") :]
+    parts = s3_uri.split("/", 2)
+    if len(parts) < 3:
+        return "https://error-invalid-s3-uri-format"
+    repository = parts[0]
+    ref = parts[1]
+    path = parts[2]
+    encoded_path = quote(path + "/")
+    https_url = f"{lakefs_base_url.rstrip('/')}/repositories/{repository}/objects?ref={ref}&path={encoded_path}"
+    return https_url

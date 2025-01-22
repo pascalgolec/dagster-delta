@@ -25,7 +25,7 @@ class DbIOManagerFixed(DbIOManager):  # noqa
         context: Union[OutputContext, InputContext],  # noqa
         output_context: OutputContext,
     ) -> TableSlice:
-        output_context_metadata = output_context.metadata or {}
+        output_context_definition_metadata = output_context.definition_metadata or {}
 
         schema: str
         table: str
@@ -33,13 +33,13 @@ class DbIOManagerFixed(DbIOManager):  # noqa
         if context.has_asset_key:
             asset_key_path = context.asset_key.path
 
-            if output_context_metadata.get("root_name"):
-                table = output_context_metadata["root_name"]
+            if output_context_definition_metadata.get("root_name"):
+                table = output_context_definition_metadata["root_name"]
             else:
                 table = asset_key_path[-1]
             # schema order of precedence: metadata, I/O manager 'schema' config, key_prefix
-            if output_context_metadata.get("schema"):
-                schema = cast(str, output_context_metadata["schema"])
+            if output_context_definition_metadata.get("schema"):
+                schema = cast(str, output_context_definition_metadata["schema"])
             elif self._schema:
                 schema = self._schema
             elif len(asset_key_path) > 1:
@@ -48,7 +48,7 @@ class DbIOManagerFixed(DbIOManager):  # noqa
                 schema = "public"
 
             if context.has_asset_partitions:
-                partition_expr = output_context_metadata.get("partition_expr")
+                partition_expr = output_context_definition_metadata.get("partition_expr")
                 if partition_expr is None:
                     raise ValueError(
                         f"Asset '{context.asset_key}' has partitions, but no 'partition_expr'"
@@ -110,8 +110,8 @@ class DbIOManagerFixed(DbIOManager):  # noqa
                     )
         else:
             table = output_context.name
-            if output_context_metadata.get("schema"):
-                schema = cast(str, output_context_metadata["schema"])
+            if output_context_definition_metadata.get("schema"):
+                schema = cast(str, output_context_definition_metadata["schema"])
             elif self._schema:
                 schema = self._schema
             else:
@@ -122,5 +122,5 @@ class DbIOManagerFixed(DbIOManager):  # noqa
             schema=schema,
             database=self._database,
             partition_dimensions=partition_dimensions,
-            columns=(context.metadata or {}).get("columns"),
+            columns=(context.definition_metadata or {}).get("columns"),
         )

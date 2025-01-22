@@ -23,7 +23,11 @@ def io_manager(tmp_path) -> DeltaLakePyarrowIOManager:
 
 @op(
     out=Out(
-        metadata={"schema": "a_df", "mode": "append", "custom_metadata": {"userName": "John Doe"}},
+        metadata={
+            "schema": "a_df",
+            "mode": "append",
+            "commit_properties": {"custom_metadata": {"userName": "John Doe"}},
+        },
     ),
 )
 def a_df() -> pa.Table:
@@ -61,7 +65,7 @@ def io_manager_with_writer_metadata(tmp_path) -> DeltaLakePyarrowIOManager:
         root_uri=str(tmp_path),
         storage_options=LocalConfig(),
         writer_engine=WriterEngine.rust,
-        custom_metadata={"userName": "John Doe"},
+        commit_properties={"custom_metadata": {"userName": "John Doe"}},
         writer_properties={"compression": "ZSTD"},
     )
 

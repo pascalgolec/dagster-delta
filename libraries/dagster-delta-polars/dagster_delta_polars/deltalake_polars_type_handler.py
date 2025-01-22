@@ -5,7 +5,7 @@ from typing import Any, Optional, Union
 import polars as pl
 import pyarrow as pa
 import pyarrow.dataset as ds
-from dagster import InputContext, MetadataValue
+from dagster import InputContext, MetadataValue, OutputContext
 from dagster._core.storage.db_io_manager import (
     DbTypeHandler,
     TableSlice,
@@ -38,7 +38,7 @@ class DeltaLakePolarsTypeHandler(DeltalakeBaseArrowTypeHandler[PolarsTypes]):  #
         else:
             raise NotImplementedError("Unsupported objected passed of type:  %s", type(obj))
 
-    def to_arrow(self, obj: PolarsTypes) -> tuple[pa.RecordBatchReader, dict[str, Any]]:  # noqa: D102
+    def to_arrow(self, obj: PolarsTypes) -> tuple[pa.Table, dict[str, Any]]:  # noqa: D102
         if isinstance(obj, pl.LazyFrame):
             obj = obj.collect()
 
@@ -47,7 +47,7 @@ class DeltaLakePolarsTypeHandler(DeltalakeBaseArrowTypeHandler[PolarsTypes]):  #
         logger.debug("shape of dataframe: %s", obj.shape)
         # TODO(ion): maybe move stats collection here
 
-        return obj.to_arrow().to_reader(), {"large_dtypes": True}
+        return obj.to_arrow(), {"large_dtypes": True}
 
     def load_input(
         self,
@@ -56,7 +56,9 @@ class DeltaLakePolarsTypeHandler(DeltalakeBaseArrowTypeHandler[PolarsTypes]):  #
         connection: TableConnection,
     ) -> PolarsTypes:
         """Loads the input as a Polars DataFrame or LazyFrame."""
-        metadata = context.metadata if context.metadata is not None else {}
+        definition_metadata = (
+            context.definition_metadata if context.definition_metadata is not None else {}
+        )
         date_format = extract_date_format_from_partition_definition(context)
 
         parquet_read_options = None
@@ -71,7 +73,7 @@ class DeltaLakePolarsTypeHandler(DeltalakeBaseArrowTypeHandler[PolarsTypes]):  #
         dataset = _table_reader(
             table_slice,
             connection,
-            version=metadata.get("table_version"),
+            version=definition_metadata.get("table_version"),
             date_format=date_format,
             parquet_read_options=parquet_read_options,
         )
@@ -86,6 +88,27 @@ class DeltaLakePolarsTypeHandler(DeltalakeBaseArrowTypeHandler[PolarsTypes]):  #
                 return self.from_arrow(scanner.to_reader(), context.dagster_type.typing_type)
         else:
             return self.from_arrow(dataset, context.dagster_type.typing_type)
+
+    def handle_output(
+        self,
+        context: OutputContext,
+        table_slice: TableSlice,
+        obj: Union[pl.DataFrame, pl.LazyFrame],
+        connection: TableConnection,
+    ):
+        """Writes polars frame as delta table"""
+        super().handle_output(context, table_slice, obj, connection)
+        metadata = {**context.consume_logged_metadata()}
+
+        if connection.table_uri.startswith("lakefs://"):
+            # We grab the lakefs endpoint from the object storage options
+            for key, value in connection.storage_options.items():
+                if key.lower() in ["endpoint", "aws_endpoint", "aws_endpoint_url", "endpoint_url"]:
+                    metadata["lakefs_link"] = MetadataValue.url(
+                        _convert_uri_to_lakefs_link(connection.table_uri, value),
+                    )
+                    break
+        context.add_output_metadata(metadata)
 
     def get_output_stats(self, obj: PolarsTypes) -> dict[str, MetadataValue]:
         """Returns output stats to be attached to the the context.
@@ -164,3 +187,19 @@ class DeltaLakePolarsIOManager(DeltaLakeIOManager):
     def default_load_type() -> Optional[type]:
         """Grabs the default load type if no type hint is passed."""
         return pl.DataFrame
+
+
+def _convert_uri_to_lakefs_link(uri: str, lakefs_base_url: str) -> str:
+    """Convert an S3 uri to a link to lakefs"""
+    from urllib.parse import quote
+
+    uri = uri[len("lakefs://") :]
+    parts = uri.split("/", 2)
+    if len(parts) < 3:
+        return "https://error-invalid-s3-uri-format"
+    repository = parts[0]
+    ref = parts[1]
+    path = parts[2]
+    encoded_path = quote(path + "/")
+    https_url = f"{lakefs_base_url.rstrip('/')}/repositories/{repository}/objects?ref={ref}&path={encoded_path}"
+    return https_url
