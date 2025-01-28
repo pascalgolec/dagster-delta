@@ -238,7 +238,7 @@ class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):  # noqa: D101
         elif main_save_mode == "create_or_replace":
             DeltaTable.create(
                 table_uri=connection.table_uri,
-                schema=_convert_pa_schema_to_delta(data.schema, **delta_params),
+                schema=_convert_pa_schema_to_delta(data.schema),
                 mode="overwrite",
                 partition_by=partition_columns,
                 configuration=table_config,
@@ -256,7 +256,7 @@ class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):  # noqa: D101
                 logger.debug("Creating a DeltaTable first before merging.")
                 dt = DeltaTable.create(
                     table_uri=connection.table_uri,
-                    schema=_convert_pa_schema_to_delta(data.schema, **delta_params),
+                    schema=_convert_pa_schema_to_delta(data.schema),
                     partition_by=partition_columns,
                     configuration=table_config,
                     storage_options=connection.storage_options,
