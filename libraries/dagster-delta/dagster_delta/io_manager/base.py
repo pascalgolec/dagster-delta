@@ -11,21 +11,27 @@ from dagster._config.pythonic_config import ConfigurableIOManagerFactory
 from dagster._core.definitions.time_window_partitions import TimeWindow
 from dagster._core.storage.db_io_manager import (
     DbClient,
-    DbIOManager,
     DbTypeHandler,
     TablePartitionDimension,
     TableSlice,
 )
 from pydantic import Field
 
-from .dbiomanager_fixed import DbIOManagerFixed
+from dagster_delta._db_io_manager import CustomDbIOManager
 
 if sys.version_info >= (3, 11):
     from typing import NotRequired
 else:
     from typing_extensions import NotRequired
 
-from .config import AzureConfig, ClientConfig, GcsConfig, LocalConfig, MergeConfig, S3Config
+from dagster_delta.config import (
+    AzureConfig,
+    ClientConfig,
+    GcsConfig,
+    LocalConfig,
+    MergeConfig,
+    S3Config,
+)
 
 DELTA_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 DELTA_DATE_FORMAT = "%Y-%m-%d"
@@ -60,7 +66,7 @@ class SchemaMode(str, Enum):
     """Deltalake schema mode"""
 
     overwrite = "overwrite"
-    append = "append"
+    merge = "merge"
 
 
 class WriterEngine(str, Enum):
@@ -85,56 +91,56 @@ class _DeltaTableIOManagerResourceConfig(TypedDict):
     parquet_read_options: NotRequired[dict[str, Any]]
 
 
-class DeltaLakeIOManager(ConfigurableIOManagerFactory):
+class BaseDeltaLakeIOManager(ConfigurableIOManagerFactory):
     """Base class for an IO manager definition that reads inputs from and writes outputs to Delta Lake.
 
     Examples:
-        .. code-block:: python
+    ```python
+    from dagster_delta import BaseDeltaLakeIOManager
+    from dagster_delta.io_manager.arrow import _DeltaLakePyArrowTypeHandler
 
-            from dagster_delta import DeltaLakeIOManager
-            from dagster_delta_polars import DeltaLakePolarsTypeHandler
+    class MyDeltaLakeIOManager(BaseDeltaLakeIOManager):
+        @staticmethod
+        def type_handlers() -> Sequence[DbTypeHandler]:
+            return [_DeltaLakePyArrowTypeHandler()]
 
-            class MyDeltaLakeIOManager(DeltaLakeIOManager):
-                @staticmethod
-                def type_handlers() -> Sequence[DbTypeHandler]:
-                    return [DeltaLakePolarsTypeHandler()]
+    @asset(
+        key_prefix=["my_schema"]  # will be used as the schema (parent folder) in Delta Lake
+    )
+    def my_table() -> pa.Table:  # the name of the asset will be the table name
+        ...
 
-            @asset(
-                key_prefix=["my_schema"]  # will be used as the schema (parent folder) in Delta Lake
-            )
-            def my_table() -> pl.DataFrame:  # the name of the asset will be the table name
-                ...
-
-            defs = Definitions(
-                assets=[my_table],
-                resources={"io_manager": MyDeltaLakeIOManager()}
-            )
+    defs = Definitions(
+        assets=[my_table],
+        resources={"io_manager": MyDeltaLakeIOManager()}
+    )
+    ```
 
     If you do not provide a schema, Dagster will determine a schema based on the assets and ops using
     the I/O Manager. For assets, the schema will be determined from the asset key, as in the above example.
     For ops, the schema can be specified by including a "schema" entry in output metadata. If none
     of these is provided, the schema will default to "public".
 
-    .. code-block:: python
+    ```python
 
-        @op(
-            out={"my_table": Out(metadata={"schema": "my_schema"})}
-        )
-        def make_my_table() -> pd.DataFrame:
-            ...
+    @op(
+        out={"my_table": Out(metadata={"schema": "my_schema"})}
+    )
+    def make_my_table() -> pa.Table:
+        ...
+    ```
 
     To only use specific columns of a table as input to a downstream op or asset, add the metadata "columns" to the
     In or AssetIn.
 
-    .. code-block:: python
-
+    ```python
         @asset(
             ins={"my_table": AssetIn("my_table", metadata={"columns": ["a"]})}
         )
-        def my_table_a(my_table: pd.DataFrame):
+        def my_table_a(my_table: pa.Table:
             # my_table will just contain the data from column "a"
             ...
-
+    ```
     """
 
     root_uri: str = Field(description="Storage location where Delta tables are stored.")
@@ -203,9 +209,9 @@ class DeltaLakeIOManager(ConfigurableIOManagerFactory):
     def default_load_type() -> Optional[type]:  # noqa: D102
         return None
 
-    def create_io_manager(self, context) -> DbIOManager:  # noqa: D102, ANN001, ARG002
+    def create_io_manager(self, context) -> CustomDbIOManager:  # noqa: D102, ANN001, ARG002
         self.storage_options.model_dump()
-        return DbIOManagerFixed(
+        return CustomDbIOManager(
             db_client=DeltaLakeDbClient(),
             database="deltalake",
             schema=self.schema_,
@@ -258,24 +264,25 @@ class DeltaLakeDbClient(DbClient):  # noqa: D101
         root_uri = resource_config["root_uri"].rstrip("/")
         storage_options = resource_config["storage_options"]
 
+        # Values of a config are unpacked into a dict[str,Any], we convert it back to the Config
+        # so that we can do str_dict()
         if "local" in storage_options:
-            storage_options = storage_options["local"]
+            storage_options = LocalConfig(**storage_options["local"])  # type: ignore
         elif "s3" in storage_options:
-            storage_options = storage_options["s3"]
+            storage_options = S3Config(**storage_options["s3"])  # type: ignore
         elif "azure" in storage_options:
-            storage_options = storage_options["azure"]
+            storage_options = AzureConfig(**storage_options["azure"])  # type: ignore
         elif "gcs" in storage_options:
-            storage_options = storage_options["gcs"]
+            storage_options = GcsConfig(storage_options["gcs"])  # type: ignore
         else:
-            storage_options = {}
+            raise NotImplementedError("No valid storage_options config found.")
 
         client_options = resource_config.get("client_options")
-        client_options = client_options or {}
+        client_options = (
+            ClientConfig(**client_options).str_dict() if client_options is not None else {}  # type: ignore
+        )
 
-        storage_options = {
-            **{k: str(v) for k, v in storage_options.items() if v is not None},
-            **{k: str(v) for k, v in client_options.items() if v is not None},
-        }
+        options = {**storage_options.str_dict(), **client_options}
         table_config = resource_config.get("table_config")
 
         # Ignore schema if None or empty string, useful to set schema = "" which overrides the assetkey
@@ -285,7 +292,7 @@ class DeltaLakeDbClient(DbClient):  # noqa: D101
             table_uri = f"{root_uri}/{table_slice.table}"
         conn = TableConnection(
             table_uri=table_uri,
-            storage_options=storage_options or {},
+            storage_options=options or {},
             table_config=table_config,
         )
 

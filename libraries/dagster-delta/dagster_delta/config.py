@@ -4,10 +4,19 @@ from typing import Literal, Optional
 from dagster import Config
 
 
+def _to_str_dict(dictionary: dict) -> dict[str, str]:
+    """Filters dict of None values and casts other values to str."""
+    return {key: str(value) for key, value in dictionary.items() if value is not None}
+
+
 class LocalConfig(Config):
     """Storage configuration for local object store."""
 
     provider: Literal["local"] = "local"
+
+    def str_dict(self) -> dict[str, str]:
+        """Storage options as str dict."""
+        return _to_str_dict(self.model_dump())
 
 
 class AzureConfig(Config):
@@ -54,6 +63,10 @@ class AzureConfig(Config):
     container_name: Optional[str] = None
     """Storage container name"""
 
+    def str_dict(self) -> dict[str, str]:
+        """Storage options as str dict."""
+        return _to_str_dict(self.model_dump())
+
 
 class S3Config(Config):
     """Storage configuration for Amazon Web Services (AWS) S3 object store."""
@@ -99,14 +112,9 @@ class S3Config(Config):
     https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html
     """
 
-    copy_if_not_exists: Optional[str] = None
-    """Specify additional headers passed to storage backend, that enable 'if_not_exists' semantics.
-
-    https://docs.rs/object_store/0.7.0/object_store/aws/enum.S3CopyIfNotExists.html#variant.Header
-    """
-
-    AWS_S3_ALLOW_UNSAFE_RENAME: Optional[bool] = None
-    """Allows tables writes that may conflict with concurrent writers."""
+    def str_dict(self) -> dict[str, str]:
+        """Storage options as str dict."""
+        return _to_str_dict(self.model_dump())
 
 
 class GcsConfig(Config):
@@ -125,6 +133,23 @@ class GcsConfig(Config):
 
     application_credentials: Optional[str] = None
     """Application credentials path"""
+
+    def str_dict(self) -> dict[str, str]:
+        """Storage options as str dict."""
+        return _to_str_dict(self.model_dump())
+
+
+class BackoffConfig(Config):
+    """Configuration for exponential back off https://docs.rs/object_store/latest/object_store/struct.BackoffConfig.html"""
+
+    init_backoff: Optional[str] = None
+    """The initial backoff duration"""
+
+    max_backoff: Optional[str] = None
+    """The maximum backoff duration"""
+
+    base: Optional[float] = None
+    """The multiplier to use for the next backoff duration"""
 
 
 class ClientConfig(Config):
@@ -178,7 +203,7 @@ class ClientConfig(Config):
     """HTTP proxy to use for requests"""
 
     timeout: Optional[str] = None
-    """Request timeout
+    """Request timeout, e.g. 10s, 60s
 
     The timeout is applied from when the request starts connecting until the response body has finished
     """
@@ -186,9 +211,48 @@ class ClientConfig(Config):
     user_agent: Optional[str] = None
     """User-Agent header to be used by this client"""
 
+    OBJECT_STORE_CONCURRENCY_LIMIT: Optional[str] = None
+    """The number of concurrent connections the underlying object store can create"""
+
+    MOUNT_ALLOW_UNSAFE_RENAME: Optional[str] = None
+    """If set it will allow unsafe renames on mounted storage"""
+
+    max_retries: Optional[int] = None
+    """The maximum number of times to retry a request. Set to 0 to disable retries"""
+
+    retry_timeout: Optional[str] = None
+    """The maximum duration of time from the initial request after which no further retries will be attempted. e.g. 10s, 60s"""
+
+    backoff_config: Optional[BackoffConfig] = None
+    """Configuration for exponential back off """
+
+    def str_dict(self) -> dict[str, str]:
+        """Storage options as str dict."""
+        model_dump = self.model_dump()
+        str_dict: dict[str, str] = {}
+        for key, value in model_dump.items():
+            if value is not None:
+                if isinstance(value, BackoffConfig):
+                    ## delta-rs uses custom config keys for the BackOffConfig
+                    ## https://delta-io.github.io/delta-rs/integrations/object-storage/special_configuration/
+                    if value.base is not None:
+                        str_dict["backoff_config.base"] = str(value.base)
+                    if value.max_backoff is not None:
+                        str_dict["backoff_config.max_backoff"] = str(value.max_backoff)
+                    if value.init_backoff is not None:
+                        str_dict["backoff_config.init_backoff"] = str(value.init_backoff)
+                else:
+                    str_dict[key] = str(value)
+        return str_dict
+
 
 class MergeType(str, Enum):
-    """Enum of the possible IO Manager merge types"""
+    """Enum of the possible IO Manager merge types
+    - "deduplicate_insert"  <- Deduplicates on write
+    - "update_only"  <- updates only the matches records
+    - "upsert"  <- updates existing matches and inserts non matched records
+    - "replace_and_delete_unmatched" <- updates existing matches and deletes unmatched
+    """
 
     deduplicate_insert = "deduplicate_insert"  # Deduplicates on write
     update_only = "update_only"  # updates only the records
@@ -203,7 +267,9 @@ class MergeConfig(Config):
     """The type of MERGE to execute."""
 
     predicate: Optional[str] = None
-    """SQL like predicate on how to merge, passed into DeltaTable.merge()"""
+    """SQL like predicate on how to merge, passed into DeltaTable.merge()
+
+    This can also be set on the asset definition metadata using the `merge_predicate` key"""
 
     source_alias: Optional[str] = None
     """Alias for the source table"""

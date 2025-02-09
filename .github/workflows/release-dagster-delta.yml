@@ -1,0 +1,15 @@
+name: build-and-release-dagster-delta
+
+on:
+  push:
+    tags:
+      - 'dagster_delta-*.*.*'
+
+jobs:
+  build-and-release-dagster-delta:
+    uses: ./.github/workflows/template-release.yml
+    with:
+      library_name: dagster-delta
+      working_directory: ./libraries/dagster-delta
+    secrets:
+      pypi_token: ${{ secrets.PYPI_API_TOKEN_DD }}

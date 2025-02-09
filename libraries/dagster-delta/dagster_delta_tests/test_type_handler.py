@@ -25,12 +25,13 @@ from dagster import (
 from dagster._check import CheckError
 from deltalake import DeltaTable
 
-from dagster_delta import DELTA_DATE_FORMAT, DeltaLakePyarrowIOManager, LocalConfig
+from dagster_delta import DeltaLakePyarrowIOManager, LocalConfig
+from dagster_delta.io_manager.base import DELTA_DATE_FORMAT
 
 warnings.filterwarnings("ignore", category=ExperimentalWarning)
 
 
-@pytest.fixture()
+@pytest.fixture
 def io_manager(tmp_path) -> DeltaLakePyarrowIOManager:
     return DeltaLakePyarrowIOManager(root_uri=str(tmp_path), storage_options=LocalConfig())
 

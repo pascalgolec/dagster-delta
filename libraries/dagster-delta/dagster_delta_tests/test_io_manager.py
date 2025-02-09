@@ -14,9 +14,8 @@ from dagster._core.storage.db_io_manager import TablePartitionDimension
 from deltalake import DeltaTable
 from deltalake.schema import Field, PrimitiveType, Schema
 
-from dagster_delta import DeltaLakePyarrowIOManager, LocalConfig
-from dagster_delta.handler import partition_dimensions_to_dnf
-from dagster_delta.io_manager import WriteMode
+from dagster_delta import DeltaLakePyarrowIOManager, LocalConfig, WriteMode
+from dagster_delta._handler.utils import partition_dimensions_to_dnf
 
 TablePartitionDimension(
     partitions=TimeWindow(datetime(2020, 1, 2), datetime(2020, 2, 3)),
@@ -24,7 +23,7 @@ TablePartitionDimension(
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def test_schema() -> Schema:
     fields = [
         Field(name="string_col", type=PrimitiveType("string")),
@@ -72,7 +71,7 @@ def add_one_to_dataset():
     add_one(a_pa_table())
 
 
-@pytest.fixture()
+@pytest.fixture
 def io_manager_with_parquet_read_options(tmp_path) -> DeltaLakePyarrowIOManager:
     return DeltaLakePyarrowIOManager(
         root_uri=str(tmp_path),

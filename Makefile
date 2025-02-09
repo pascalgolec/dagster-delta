@@ -18,35 +18,15 @@ else
     RESET        := ""
 endif
 
-.venv:  ## Set up virtual environment and install requirements
-	uv venv
-	$(MAKE) requirements
 
-.PHONY: requirements
-requirements: .venv  ## Install/refresh all project requirements
-	uv pip install -r requirements.txt \
-		-e libraries/dagster-delta \
-		-e libraries/dagster-delta-polars \
-		-e libraries/dagster-unity-catalog-polars \
-		--config-settings editable_mode=compat
-		
 .PHONY: pre-commit
-pre-commit: .venv  ## Run autoformatting and linting
+pre-commit:
 	@echo "${GREEN}Formatting with ruff...${RESET}"
-	$(VENV_BIN)/ruff format .
+	uv run ruff format .
 	@echo "${GREEN}Linting with ruff...${RESET}"
-	$(VENV_BIN)/ruff check .
+	uv run ruff check .
 	@echo "${GREEN}Running static type checks...${RESET}"
-	$(VENV_BIN)/pyright .
-
-.PHONY: ci-check
-ci-check: .venv  ## Checks autoformatting and linting
-	@echo "${GREEN}Checking formatting with ruff...${RESET}"
-	$(VENV_BIN)/ruff format --check .
-	@echo "${GREEN}Linting with ruff...${RESET}"
-	$(VENV_BIN)/ruff check .
-	@echo "${GREEN}Running static type checks...${RESET}"
-	$(VENV_BIN)/pyright .
+	uv run pyright .
 
 .PHONY: clean
 clean: ## Remove environment and the caches

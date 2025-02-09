@@ -12,7 +12,7 @@ from deltalake import DeltaTable
 from dagster_delta import DeltaLakePyarrowIOManager, LocalConfig, WriterEngine
 
 
-@pytest.fixture()
+@pytest.fixture
 def io_manager(tmp_path) -> DeltaLakePyarrowIOManager:
     return DeltaLakePyarrowIOManager(
         root_uri=str(tmp_path),
@@ -59,7 +59,7 @@ def test_deltalake_io_manager_with_ops_rust_writer(tmp_path, io_manager):
         result.extend([1, 2, 3])
 
 
-@pytest.fixture()
+@pytest.fixture
 def io_manager_with_writer_metadata(tmp_path) -> DeltaLakePyarrowIOManager:
     return DeltaLakePyarrowIOManager(
         root_uri=str(tmp_path),

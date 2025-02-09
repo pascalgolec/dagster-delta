@@ -1,15 +1,19 @@
 import os
+import warnings
 
 import pyarrow as pa
 import pytest
 from dagster import (
+    ExperimentalWarning,
     Out,
     graph,
     op,
 )
 from deltalake import DeltaTable
 
-from dagster_delta import DeltaLakePyarrowIOManager, LocalConfig, WriterEngine
+from dagster_delta import BackoffConfig, ClientConfig, DeltaLakePyarrowIOManager, LocalConfig
+
+warnings.filterwarnings("ignore", category=ExperimentalWarning)
 
 
 @pytest.fixture
@@ -17,7 +21,11 @@ def io_manager(tmp_path) -> DeltaLakePyarrowIOManager:
     return DeltaLakePyarrowIOManager(
         root_uri=str(tmp_path),
         storage_options=LocalConfig(),
-        writer_engine=WriterEngine.rust,
+        client_options=ClientConfig(
+            max_retries=10,
+            retry_timeout="10s",
+            backoff_config=BackoffConfig(init_backoff="10s", base=1.2),
+        ),
     )
 
 
@@ -36,7 +44,7 @@ def add_one_to_dataframe():
     add_one(a_df())
 
 
-def test_deltalake_io_manager_with_ops_rust_writer(tmp_path, io_manager):
+def test_deltalake_io_manager_with_client_config(tmp_path, io_manager):
     resource_defs = {"io_manager": io_manager}
 
     job = add_one_to_dataframe.to_job(resource_defs=resource_defs)
