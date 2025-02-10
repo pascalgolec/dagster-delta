@@ -21,10 +21,10 @@ from dagster import (
     op,
 )
 from dagster._check import CheckError
-from dagster_delta import DELTA_DATE_FORMAT, LocalConfig, WriteMode
 from deltalake import DeltaTable
 
-from dagster_delta_polars import DeltaLakePolarsIOManager
+from dagster_delta import DeltaLakePolarsIOManager, LocalConfig, WriteMode
+from dagster_delta.io_manager.base import DELTA_DATE_FORMAT
 
 warnings.filterwarnings("ignore", category=ExperimentalWarning)
 

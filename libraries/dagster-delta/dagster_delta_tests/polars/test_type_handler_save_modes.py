@@ -7,10 +7,9 @@ from dagster import (
     graph,
     op,
 )
-from dagster_delta import LocalConfig, WriteMode
 from deltalake import DeltaTable
 
-from dagster_delta_polars import DeltaLakePolarsIOManager
+from dagster_delta import DeltaLakePolarsIOManager, LocalConfig, WriteMode
 
 
 @pytest.fixture

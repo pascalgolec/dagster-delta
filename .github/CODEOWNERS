@@ -1,3 +1,2 @@
 libraries/dagster-delta/ @ion-elgreco
-libraries/dagster-delta-polars/ @ion-elgreco @sverbruggen
 .github/ @ion-elgreco

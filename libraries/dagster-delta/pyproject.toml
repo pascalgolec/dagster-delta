@@ -1,12 +1,13 @@
 [project]
 name = "dagster-delta"
-version = "0.2.1"
-description = "base deltalake IO Managers for Dagster"
+version = "0.3.0"
+description = "Deltalake IO Managers for Dagster with pyarrow and Polars support."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "dagster>=1.8,<2.0",
     "deltalake>=0.24",
+    "pendulum>=3.0.0",
 ]
 authors = [{name = "Ion Koutsouris"}]
 license = { file = "licenses/LICENSE" }
@@ -17,9 +18,12 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12"
 ]
-keywords = ["dagster", "deltalake", "delta","datalake", "io manager"]
+keywords = ["dagster", "deltalake", "delta","datalake", "io manager", "polars", "pyarrow"]
 
-
+[project.optional-dependencies]
+polars = [
+    "polars"
+]
 
 [build-system]
 requires = ["setuptools", "wheel"]
@@ -109,6 +113,9 @@ lint.ignore = [
 # Allow autofix for all enabled rules (when `--fix`) is provided.
 lint.fixable = ["ALL"]
 
+# Allow unused variables when underscore-prefixed.
+lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".bzr",
@@ -137,9 +144,6 @@ exclude = [
 # Same as Black.
 line-length = 100
 
-# Allow unused variables when underscore-prefixed.
-lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
-
 # Assume Python 3.9
 target-version = "py39"
 
@@ -153,3 +157,12 @@ suppress-none-returning = true
 [tool.ruff.lint.pydocstyle]
 # Use Google-style docstrings.
 convention = "google"
+
+[dependency-groups]
+dev = [
+    "polars>=1.22.0",
+    "pyarrow<=18.0.0",
+    "pyright>=1.1.393",
+    "pytest>=8.3.4",
+    "ruff>=0.9.5",
+]

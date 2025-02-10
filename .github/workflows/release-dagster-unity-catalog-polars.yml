@@ -1,0 +1,15 @@
+name: build-and-release-dagster-unity-catalog-polars
+
+on:
+  push:
+    tags:
+      - 'dagster_unity_catalog_polars-*.*.*'
+
+jobs:
+  build-and-release-dagster-unity-catalog-polars:
+    uses: ./.github/workflows/template-release.yml
+    with:
+      library_name: dagster-unity-catalog-polars
+      working_directory: ./libraries/dagster-unity-catalog-polars
+    secrets:
+      pypi_token: ${{ secrets.PYPI_API_TOKEN_DDUC }}

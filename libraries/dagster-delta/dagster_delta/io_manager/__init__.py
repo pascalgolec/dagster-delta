@@ -1,13 +1,3 @@
-from dagster_delta.config import (
-    AzureConfig,
-    BackoffConfig,
-    ClientConfig,
-    GcsConfig,
-    LocalConfig,
-    MergeConfig,
-    MergeType,
-    S3Config,
-)
 from dagster_delta.io_manager.arrow import DeltaLakePyarrowIOManager
 from dagster_delta.io_manager.base import (
     BaseDeltaLakeIOManager,
@@ -15,21 +5,11 @@ from dagster_delta.io_manager.base import (
     WriteMode,
     WriterEngine,
 )
-from dagster_delta.resources import DeltaTableResource
 
 __all__ = [
-    "AzureConfig",
-    "ClientConfig",
-    "GcsConfig",
-    "S3Config",
-    "LocalConfig",
-    "BackoffConfig",
-    "MergeConfig",
-    "MergeType",
     "WriteMode",
     "WriterEngine",
     "SchemaMode",
-    "DeltaTableResource",
     "BaseDeltaLakeIOManager",
     "DeltaLakePyarrowIOManager",
 ]

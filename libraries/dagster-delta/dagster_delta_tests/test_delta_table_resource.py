@@ -4,8 +4,7 @@ import pyarrow as pa
 from dagster import asset, materialize
 from deltalake import write_deltalake
 
-from dagster_delta import DeltaTableResource
-from dagster_delta.config import LocalConfig
+from dagster_delta import BackoffConfig, ClientConfig, DeltaTableResource, LocalConfig
 
 
 def test_resource(tmp_path):
@@ -35,6 +34,11 @@ def test_resource(tmp_path):
             "delta_table": DeltaTableResource(
                 url=os.path.join(tmp_path, "table"),
                 storage_options=LocalConfig(),
+                client_options=ClientConfig(
+                    max_retries=10,
+                    retry_timeout="10s",
+                    backoff_config=BackoffConfig(init_backoff="10s", base=1.2),
+                ),
             ),
         },
     )
@@ -73,6 +77,11 @@ def test_resource_versioned(tmp_path):
             "delta_table": DeltaTableResource(
                 url=os.path.join(tmp_path, "table"),
                 storage_options=LocalConfig(),
+                client_options=ClientConfig(
+                    max_retries=10,
+                    retry_timeout="10s",
+                    backoff_config=BackoffConfig(init_backoff="10s", base=1.2),
+                ),
                 version=0,
             ),
         },

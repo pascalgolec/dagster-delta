@@ -99,7 +99,7 @@ class DeltaLakePolarsLakeFSTypeHandler(DeltaLakePolarsTypeHandler):
         logger = logging.getLogger()
         logger.setLevel("DEBUG")
 
-        step_branch_name = f"{self.source_branch_name}-step-jobid-{context.run_id}-asset-{context.asset_key.to_user_string().replace('/','-').replace('_','-')}"[
+        step_branch_name = f"{self.source_branch_name}-step-jobid-{context.run_id}-asset-{context.asset_key.to_user_string().replace('/', '-').replace('_', '-')}"[
             0:256
         ]
         self.repository.branch(step_branch_name).create(source_reference=self.source_branch_name)
@@ -139,6 +139,7 @@ class DeltaLakePolarsLakeFSTypeHandler(DeltaLakePolarsTypeHandler):
         # Since we don't care in the logging it got branched out there.
         metadata = {**context.consume_logged_metadata()}
         metadata["table_uri"] = MetadataValue.path(connection.table_uri)
+        # metadata["dagster/uri"] = MetadataValue.path(connection.table_uri)  # noqa: ERA001
         if self.lakefs_base_url is not None:
             metadata["lakefs_link"] = MetadataValue.url(
                 _convert_s3_uri_to_lakefs_link(connection.table_uri, self.lakefs_base_url),

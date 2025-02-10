@@ -6,7 +6,6 @@ from typing import (
 )
 
 from dagster._core.definitions.multi_dimensional_partitions import (
-    MultiPartitionKey,
     MultiPartitionsDefinition,
 )
 from dagster._core.definitions.time_window_partitions import (
@@ -16,13 +15,38 @@ from dagster._core.execution.context.input import InputContext
 from dagster._core.execution.context.output import OutputContext
 from dagster._core.storage.db_io_manager import DbIOManager, TablePartitionDimension, TableSlice
 
+from dagster_delta._db_io_manager.utils import (
+    generate_multi_partitions_dimension,
+    generate_single_partition_dimension,
+)
+
 T = TypeVar("T")
 
 
-class DbIOManagerFixed(DbIOManager):  # noqa
+class CustomDbIOManager(DbIOManager):
+    """Works exactly like the DbIOManager, but overrides the _get_table_slice method
+    to provide support for partition mapping. e.g. a mapping from partition A to partition B,
+    where A is partitioned on two dimensions and B is partitioned on only one dimension.
+
+    Additionally, gives ability to override
+    the table name using `root_name` in the metadata.
+
+    Example:
+    ```
+    @dg.asset(
+    partitions_def=dg.StaticPartitionsDefinition(["a", "b"]),
+    metadata={
+        "partition_expr": "foo",
+        "root_name": "asset_partitioned",
+        },
+    )
+    def asset_partitioned_1(upstream_1, upstream_2):
+    ```
+    """
+
     def _get_table_slice(
         self,
-        context: Union[OutputContext, InputContext],  # noqa
+        context: Union[OutputContext, InputContext],
         output_context: OutputContext,
     ) -> TableSlice:
         output_context_definition_metadata = output_context.definition_metadata or {}
@@ -33,6 +57,7 @@ class DbIOManagerFixed(DbIOManager):  # noqa
         if context.has_asset_key:
             asset_key_path = context.asset_key.path
 
+            ## Override the
             if output_context_definition_metadata.get("root_name"):
                 table = output_context_definition_metadata["root_name"]
             else:
@@ -58,54 +83,27 @@ class DbIOManagerFixed(DbIOManager):  # noqa
                     )
 
                 if isinstance(context.asset_partitions_def, MultiPartitionsDefinition):
-                    multi_partition_key_mappings = [
-                        cast(MultiPartitionKey, partition_key).keys_by_dimension
-                        for partition_key in context.asset_partition_keys
-                    ]
-                    for part in context.asset_partitions_def.partitions_defs:
-                        partitions = []
-                        for multi_partition_key_mapping in multi_partition_key_mappings:
-                            partition_key = multi_partition_key_mapping[part.name]
-                            if isinstance(part.partitions_def, TimeWindowPartitionsDefinition):
-                                partitions.append(
-                                    part.partitions_def.time_window_for_partition_key(
-                                        partition_key,  # type: ignore
-                                    ),
-                                )
-                            else:
-                                partitions.append(partition_key)
-
-                        partition_expr_str = cast(Mapping[str, str], partition_expr).get(part.name)
-                        if partition_expr is None:
-                            raise ValueError(
-                                f"Asset '{context.asset_key}' has partition {part.name}, but the"
-                                f" 'partition_expr' metadata does not contain a {part.name} entry,"
-                                " so we don't know what column to filter it on. Specify which"
-                                " column of the database contains data for the"
-                                f" {part.name} partition.",
-                            )
-                        partition_dimensions.append(
-                            TablePartitionDimension(
-                                partition_expr=cast(str, partition_expr_str),
-                                partitions=partitions,
-                            ),
-                        )
-                elif isinstance(context.asset_partitions_def, TimeWindowPartitionsDefinition):
-                    partition_dimensions.append(
-                        TablePartitionDimension(
-                            partition_expr=cast(str, partition_expr),
-                            partitions=(
-                                context.asset_partitions_time_window
-                                if context.asset_partition_keys
-                                else []
-                            ),
+                    partition_dimensions.extend(
+                        generate_multi_partitions_dimension(
+                            asset_partition_keys=context.asset_partition_keys,
+                            asset_partitions_def=context.asset_partitions_def,
+                            partition_expr=cast(Mapping[str, str], partition_expr),
+                            asset_key=context.asset_key,
                         ),
                     )
                 else:
                     partition_dimensions.append(
-                        TablePartitionDimension(
+                        generate_single_partition_dimension(
                             partition_expr=cast(str, partition_expr),
-                            partitions=context.asset_partition_keys,
+                            asset_partition_keys=context.asset_partition_keys,
+                            asset_partitions_time_window=(
+                                context.asset_partitions_time_window
+                                if isinstance(
+                                    context.asset_partitions_def,
+                                    TimeWindowPartitionsDefinition,
+                                )
+                                else None
+                            ),
                         ),
                     )
         else:
