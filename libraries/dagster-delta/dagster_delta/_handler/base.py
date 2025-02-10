@@ -34,7 +34,9 @@ T = TypeVar("T")
 ArrowTypes = Union[pa.Table, pa.RecordBatchReader, ds.Dataset]
 
 
-class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):  # noqa: D101
+class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):
+    """Base TypeHandler implementation for arrow supported libraries used to handle deltalake IO."""
+
     @abstractmethod
     def from_arrow(self, obj: pa.RecordBatchReader, target_type: type) -> T:
         """Abstract method to convert arrow to target type"""
