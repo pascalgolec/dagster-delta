@@ -16,7 +16,7 @@ authors = [
     {name = "Ion Koutsouris", email = "15728914+ion-elgreco@users.noreply.github.com"},
     {name = "Stefan Verbruggen", email = "27513235+sverbruggen@users.noreply.github.com"}
 ]
-license = { file = "licenses/LICENSE" }
+license = { file = "LICENSE" }
 classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3.9",
@@ -27,10 +27,8 @@ classifiers = [
 keywords = ["dagster", "polars", "io manager", "databricks", "unity catalog"]
 
 [build-system]
-requires = ["setuptools", "wheel"]
-
-[tool.setuptools]
-packages = ["dagster_unity_catalog_polars"]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.pyright]
 
