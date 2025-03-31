@@ -1,3 +1,0 @@
-include LICENSE
-include other_licenses
-include dagster_delta_polars/py.typed
