@@ -1,5 +1,5 @@
 # dagster-delta
-Dagster deltalake implementation for Pyarrow & Polars. Originally forked from dagster-deltalake with customizations. 
+Dagster deltalake implementation for Pyarrow & Polars. Originally forked from dagster-deltalake with customizations.
 
 The IO Managers support partition mapping, custom write modes, special metadata configuration for advanced use cases.
 
@@ -20,6 +20,7 @@ dagster-delta supports MERGE execution with a couple pre-defined MERGE types (da
 - **update_only**  <- updates only the matches records
 - **upsert**  <- updates existing matches and inserts non matched records
 - **replace_and_delete_unmatched** <- updates existing matches and deletes unmatched
+- **custom** <- custom Merge with MergeOperationsConfig
 
 Example:
 ```python
@@ -42,6 +43,36 @@ defs = Definitions(
             predicate="s.a = t.a",
             source_alias="s",
             target_alias="t",
+        )
+    )}
+)
+```
+
+Custom merge (gives full control)
+```python
+from dagster_delta import DeltaLakePolarsIOManager, WriteMode, MergeConfig, MergeType, MergeOperationsConfig
+from dagster_delta_polars import DeltaLakePolarsIOManager
+
+@asset(
+    key_prefix=["my_schema"]  # will be used as the schema (parent folder) in Delta Lake
+)
+def my_table() -> pl.DataFrame:  # the name of the asset will be the table name
+    ...
+
+defs = Definitions(
+    assets=[my_table],
+    resources={"io_manager": DeltaLakePolarsIOManager(
+        root_uri="s3://bucket",
+        mode=WriteMode.merge, # or just "merge"
+        merge_config=MergeConfig(
+            merge_type=MergeType.custom,
+            predicate="s.a = t.a",
+            source_alias="s",
+            target_alias="t",
+            merge_operations_config=MergeOperationsConfig(
+                when_not_matched_insert_all=[WhenNotMatchedInsertAll(predicate="s.price > 600")],
+                when_matched_update_all=[WhenMatchedUpdateAll()],
+            ),
         )
     )}
 )
@@ -190,28 +221,28 @@ def asset_partitioned_1(upstream_1: pl.DataFrame, upstream_2: pl.DataFrame) -> p
 def asset_partitioned_2(upstream_3: pl.DataFrame, upstream_4: pl.DataFrame) -> pl.DataFrame:
     ...
 
-```                                                                                       
+```
 
 Effectively this would be the flow:
 
-```                                                                             
-                                                                                    
-                 {static_partition_def: [a,b]}                                      
-┌───────────┐                                                                       
-│upstream 1 ├─┐ ┌────────────────────────┐                                          
-└───────────┘ │ │                        │            write to storage on partition (a,b)                                 
-┌───────────┐ └─►   asset_partitioned_1  ├──────────────────────┐                   
-│upstream 2 ├───►                        │                      │                   
+```
+
+                 {static_partition_def: [a,b]}
+┌───────────┐
+│upstream 1 ├─┐ ┌────────────────────────┐
+└───────────┘ │ │                        │            write to storage on partition (a,b)
+┌───────────┐ └─►   asset_partitioned_1  ├──────────────────────┐
+│upstream 2 ├───►                        │                      │
 └───────────┘   └────────────────────────┘       ┌──────────────▼──────────────────┐
                                                  │                     partitions  │
                                                  │  asset_partitioned:             │
                                                  │                     [a,b,c,d]   │
 ┌───────────┐   ┌────────────────────────┐       └──────────────▲──────────────────┘
-│upstream 3 ├──┐│                        │                      │                   
-└───────────┘  └►   asset_partitioned_2  │                      │                   
-┌───────────┐ ┌─►                        ├──────────────────────┘                   
-│upstream 4 ├─┘ └────────────────────────┘            write to storage on partition (c,d)                            
-└───────────┘                                                                       
-                 {static_partition_def: [c,d]}                                      
-                                            
+│upstream 3 ├──┐│                        │                      │
+└───────────┘  └►   asset_partitioned_2  │                      │
+┌───────────┐ ┌─►                        ├──────────────────────┘
+│upstream 4 ├─┘ └────────────────────────┘            write to storage on partition (c,d)
+└───────────┘
+                 {static_partition_def: [c,d]}
+
 ```
