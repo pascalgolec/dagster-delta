@@ -71,7 +71,7 @@ def merge_execute(
         elif merge_config.merge_operations_config is not None:
             operations_config = merge_config.merge_operations_config
         else:
-            raise Exception("merge predicate was not provided")
+            raise Exception("merge operations config was not provided")
         operations_config = MergeOperationsConfig.model_validate(operations_config)
         return apply_merge_operations(merger, operations_config).execute()
     else:
