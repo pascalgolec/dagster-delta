@@ -1,5 +1,4 @@
 import os
-import warnings
 from datetime import datetime
 
 import polars as pl
@@ -9,7 +8,6 @@ from dagster import (
     AssetIn,
     DailyPartitionsDefinition,
     DynamicPartitionsDefinition,
-    ExperimentalWarning,
     MultiPartitionKey,
     MultiPartitionsDefinition,
     Out,
@@ -25,8 +23,6 @@ from deltalake import DeltaTable
 
 from dagster_delta import DeltaLakePolarsIOManager, LocalConfig, WriteMode
 from dagster_delta.io_manager.base import DELTA_DATE_FORMAT
-
-warnings.filterwarnings("ignore", category=ExperimentalWarning)
 
 
 @pytest.fixture
@@ -108,7 +104,6 @@ def test_deltalake_io_manager_with_assets(
     asset1_path,
     asset2_path,
 ):
-    warnings.filterwarnings("ignore", category=ExperimentalWarning)
     resource_defs = {"io_manager": io_manager}
 
     # materialize asset twice to ensure that tables get properly deleted
@@ -177,7 +172,6 @@ def b_plus_one_columns_lazy(b_df_lazy: pl.LazyFrame) -> pl.LazyFrame:
     ],
 )
 def test_loading_columns(tmp_path, io_manager, asset1, asset2, asset1_path, asset2_path):
-    warnings.filterwarnings("ignore", category=ExperimentalWarning)
     resource_defs = {"io_manager": io_manager}
 
     # materialize asset twice to ensure that tables get properly deleted
@@ -313,7 +307,6 @@ def load_partitioned(daily_partitioned: pl.DataFrame) -> pl.DataFrame:
 
 
 def test_load_partitioned_asset(io_manager):
-    warnings.filterwarnings("ignore", category=ExperimentalWarning)
     resource_defs = {"io_manager": io_manager}
 
     res = materialize(

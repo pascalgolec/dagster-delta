@@ -25,6 +25,7 @@ from dagster_delta._handler.utils import (
     partition_dimensions_to_dnf,
     read_table,
 )
+from dagster_delta.config import MergeConfig
 from dagster_delta.io_manager.base import (
     TableConnection,
     _DeltaTableIOManagerResourceConfig,
@@ -63,7 +64,10 @@ class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):
         logger = logging.getLogger()
         logger.setLevel("DEBUG")
         definition_metadata = context.definition_metadata or {}
+
         merge_predicate_from_metadata = definition_metadata.get("merge_predicate")
+        merge_operations_config_from_metadata = definition_metadata.get("merge_operations_config")
+
         additional_table_config = definition_metadata.get("table_configuration", {})
         if connection.table_config is not None:
             table_config = additional_table_config | connection.table_config
@@ -179,12 +183,13 @@ class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):
             merge_stats = merge_execute(
                 dt,
                 data,
-                merge_config,
+                MergeConfig.model_validate(merge_config),
                 writer_properties=writer_properties,
                 commit_properties=commit_properties,
                 custom_metadata=custom_metadata,
                 delta_params=delta_params,
                 merge_predicate_from_metadata=merge_predicate_from_metadata,
+                merge_operations_config=merge_operations_config_from_metadata,
                 partition_filters=partition_filters,
             )
 

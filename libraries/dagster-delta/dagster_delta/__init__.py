@@ -5,8 +5,16 @@ from dagster_delta.config import (
     GcsConfig,
     LocalConfig,
     MergeConfig,
+    MergeOperationsConfig,
     MergeType,
     S3Config,
+    WhenMatchedDelete,
+    WhenMatchedUpdate,
+    WhenMatchedUpdateAll,
+    WhenNotMatchedBySourceDelete,
+    WhenNotMatchedBySourceUpdate,
+    WhenNotMatchedInsert,
+    WhenNotMatchedInsertAll,
 )
 from dagster_delta.io_manager.arrow import DeltaLakePyarrowIOManager
 from dagster_delta.io_manager.base import (
@@ -32,6 +40,14 @@ __all__ = [
     "DeltaTableResource",
     "BaseDeltaLakeIOManager",
     "DeltaLakePyarrowIOManager",
+    "WhenMatchedDelete",
+    "WhenMatchedUpdate",
+    "WhenMatchedUpdateAll",
+    "WhenNotMatchedBySourceDelete",
+    "WhenNotMatchedBySourceUpdate",
+    "WhenNotMatchedInsert",
+    "WhenNotMatchedInsertAll",
+    "MergeOperationsConfig",
 ]
 
 

@@ -1,7 +1,5 @@
 import os
-import warnings
 
-import dagster as dg
 import pyarrow as pa
 from dagster import (
     asset,
@@ -29,7 +27,6 @@ def test_asset_with_root_name(
     tmp_path,
     io_manager: DeltaLakePyarrowIOManager,
 ):
-    warnings.filterwarnings("ignore", category=dg.ExperimentalWarning)
     resource_defs = {"io_manager": io_manager}
 
     res = materialize([asset_1], resources=resource_defs)
