@@ -252,12 +252,91 @@ class MergeType(str, Enum):
     - "update_only"  <- updates only the matches records
     - "upsert"  <- updates existing matches and inserts non matched records
     - "replace_and_delete_unmatched" <- updates existing matches and deletes unmatched
+    - "custom" <- requires MergeOperationsConfig to be provided
     """
 
     deduplicate_insert = "deduplicate_insert"  # Deduplicates on write
     update_only = "update_only"  # updates only the records
     upsert = "upsert"  # updates and inserts
     replace_delete_unmatched = "replace_and_delete_unmatched"
+    custom = "custom"
+
+
+class OperationConfig(Config):
+    """Basic operation config"""
+
+    predicate: Optional[str] = None
+
+
+class OperationAllConfig(Config):
+    """Configuration for `_all` operations"""
+
+    predicate: Optional[str] = None
+    except_cols: Optional[list[str]] = None
+
+
+class OperationWithUpdatesConfig(Config):
+    """Configuration for operations that allow specific column updates"""
+
+    updates: dict[str, str]
+    predicate: Optional[str] = None
+
+
+class WhenNotMatchedInsert(OperationWithUpdatesConfig):
+    """When not matched statement"""
+
+    pass
+
+
+class WhenNotMatchedInsertAll(OperationAllConfig):
+    """When not matched insert all statement"""
+
+    pass
+
+
+class WhenMatchedUpdate(OperationWithUpdatesConfig):
+    """When matched update statement"""
+
+    pass
+
+
+class WhenMatchedUpdateAll(OperationAllConfig):
+    """When matched update all statement"""
+
+    pass
+
+
+class WhenMatchedDelete(OperationConfig):
+    """When matched delete statement"""
+
+    pass
+
+
+class WhenNotMatchedBySourceDelete(OperationConfig):
+    """When not matched by source delete statement"""
+
+    pass
+
+
+class WhenNotMatchedBySourceUpdate(OperationWithUpdatesConfig):
+    """When not matched by source update statement"""
+
+    pass
+
+
+class MergeOperationsConfig(Config):
+    """Configuration for each merge operation. Only used with merge_type 'custom'.
+
+    If you have multiple when statements of a single operation, they are evaluated in the order as provided in the list.
+    """
+
+    when_not_matched_insert: Optional[list[WhenNotMatchedInsert]] = None
+    when_not_matched_insert_all: Optional[list[WhenNotMatchedInsertAll]] = None
+    when_matched_update: Optional[list[WhenMatchedUpdate]] = None
+    when_matched_update_all: Optional[list[OperationAllConfig]] = None
+    when_matched_delete: Optional[list[WhenMatchedDelete]] = None
+    when_not_matched_by_source_delete: Optional[list[WhenNotMatchedBySourceDelete]] = None
+    when_not_matched_by_source_update: Optional[list[WhenNotMatchedBySourceUpdate]] = None
 
 
 class MergeConfig(Config):
@@ -279,3 +358,6 @@ class MergeConfig(Config):
 
     error_on_type_mismatch: bool = True
     """specify if merge will return error if data types are mismatching"""
+
+    merge_operations_config: Optional[MergeOperationsConfig] = None
+    """Full configuration of each merge operation, only use with merge_type='custom'"""

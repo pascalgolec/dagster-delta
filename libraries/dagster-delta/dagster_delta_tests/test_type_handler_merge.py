@@ -13,9 +13,11 @@ from dagster_delta import (
     DeltaLakePyarrowIOManager,
     LocalConfig,
     MergeConfig,
+    MergeOperationsConfig,
     MergeType,
     WriteMode,
 )
+from dagster_delta.config import WhenMatchedUpdateAll, WhenNotMatchedInsertAll
 
 
 @op(out=Out(metadata={"schema": "a_df"}))
@@ -45,6 +47,42 @@ def test_deltalake_io_manager_with_ops_rust_writer(tmp_path, merge_type: MergeTy
                 predicate="s.a = t.a",
                 source_alias="s",
                 target_alias="t",
+            ),
+        ),
+    }
+
+    job = add_one_to_dataframe.to_job(resource_defs=resource_defs)
+
+    # run the job twice to ensure that tables get properly deleted
+    for _ in range(2):
+        res = job.execute_in_process()
+
+        assert res.success
+
+        dt = DeltaTable(os.path.join(tmp_path, "a_df/result"))
+        out_df = dt.to_pyarrow_table()
+        assert sorted(out_df["a"].to_pylist()) == [1, 2, 3]
+
+        dt = DeltaTable(os.path.join(tmp_path, "add_one/result"))
+        out_df = dt.to_pyarrow_table()
+        assert sorted(out_df["a"].to_pylist()) == [2, 3, 4]
+
+
+def test_deltalake_io_manager_custom_merge(tmp_path):
+    resource_defs = {
+        "io_manager": DeltaLakePyarrowIOManager(
+            root_uri=str(tmp_path),
+            storage_options=LocalConfig(),
+            mode=WriteMode.merge,
+            merge_config=MergeConfig(
+                merge_type=MergeType.custom,
+                predicate="s.a = t.a",
+                source_alias="s",
+                target_alias="t",
+                merge_operations_config=MergeOperationsConfig(
+                    when_not_matched_insert_all=[WhenNotMatchedInsertAll()],
+                    when_matched_update_all=[WhenMatchedUpdateAll()],
+                ),
             ),
         ),
     }

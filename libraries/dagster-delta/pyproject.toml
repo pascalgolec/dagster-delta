@@ -1,6 +1,6 @@
 [project]
 name = "dagster-delta"
-version = "0.3.0"
+version = "0.4.0"
 description = "Deltalake IO Managers for Dagster with pyarrow and Polars support."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -56,6 +56,8 @@ exclude = [
     "node_modules",
     "venv",
 ]
+venvPath = "."
+venv = ".venv"
 reportMissingImports = false
 pythonVersion =  "3.10"
 
@@ -160,7 +162,7 @@ convention = "google"
 dev = [
     "polars>=1.22.0",
     "pyarrow<=18.0.0",
-    "pyright>=1.1.393",
+    "pyright==1.1.393",
     "pytest>=8.3.4",
     "ruff>=0.9.5",
 ]

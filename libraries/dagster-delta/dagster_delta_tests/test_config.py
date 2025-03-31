@@ -1,10 +1,8 @@
 import os
-import warnings
 
 import pyarrow as pa
 import pytest
 from dagster import (
-    ExperimentalWarning,
     Out,
     graph,
     op,
@@ -12,8 +10,6 @@ from dagster import (
 from deltalake import DeltaTable
 
 from dagster_delta import BackoffConfig, ClientConfig, DeltaLakePyarrowIOManager, LocalConfig
-
-warnings.filterwarnings("ignore", category=ExperimentalWarning)
 
 
 @pytest.fixture
