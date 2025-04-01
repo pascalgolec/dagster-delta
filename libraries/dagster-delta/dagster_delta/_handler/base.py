@@ -64,10 +64,25 @@ class DeltalakeBaseArrowTypeHandler(DbTypeHandler[T], Generic[T]):
         logger = logging.getLogger()
         logger.setLevel("DEBUG")
         definition_metadata = context.definition_metadata or {}
+        output_metadata = context.output_metadata or {}
+        # Gets merge_predicate or merge_operations_config in this order: runtime metadata -> definition metadata -> IO Manager config
+        merge_predicate_from_metadata = output_metadata.get(
+            "merge_predicate",
+        )
+        if merge_predicate_from_metadata is not None:
+            merge_predicate_from_metadata = merge_predicate_from_metadata.value
+        if merge_predicate_from_metadata is None:
+            merge_predicate_from_metadata = definition_metadata.get("merge_predicate")
 
-        merge_predicate_from_metadata = definition_metadata.get("merge_predicate")
-        merge_operations_config_from_metadata = definition_metadata.get("merge_operations_config")
-
+        merge_operations_config_from_metadata = output_metadata.get(
+            "merge_operations_config",
+        )
+        if merge_operations_config_from_metadata is not None:
+            merge_operations_config_from_metadata = merge_operations_config_from_metadata.value
+        if merge_operations_config_from_metadata is None:
+            merge_operations_config_from_metadata = definition_metadata.get(
+                "merge_operations_config",
+            )
         additional_table_config = definition_metadata.get("table_configuration", {})
         if connection.table_config is not None:
             table_config = additional_table_config | connection.table_config
