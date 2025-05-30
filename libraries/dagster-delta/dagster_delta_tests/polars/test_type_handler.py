@@ -19,7 +19,7 @@ from dagster import (
     op,
 )
 from dagster._check import CheckError
-from deltalake import DeltaTable
+from deltalake import DeltaTable, QueryBuilder
 
 from dagster_delta import DeltaLakePolarsIOManager, LocalConfig, WriteMode
 from dagster_delta.io_manager.base import DELTA_DATE_FORMAT
@@ -61,11 +61,12 @@ def test_deltalake_io_manager_with_ops(tmp_path, io_manager):
         assert res.success
 
         dt = DeltaTable(os.path.join(tmp_path, "a_df/result"))
-        out_df = dt.to_pyarrow_table()
+
+        out_df = QueryBuilder().register("tbl", dt).execute("select * from tbl").read_all()
         assert out_df["a"].to_pylist() == [1, 2, 3]
 
         dt = DeltaTable(os.path.join(tmp_path, "add_one/result"))
-        out_df = dt.to_pyarrow_table()
+        out_df = QueryBuilder().register("tbl", dt).execute("select * from tbl").read_all()
         assert out_df["a"].to_pylist() == [2, 3, 4]
 
 

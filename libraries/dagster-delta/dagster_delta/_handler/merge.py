@@ -1,8 +1,6 @@
 import logging
 from typing import Any, Optional, TypeVar, Union
 
-import pyarrow as pa
-import pyarrow.dataset as ds
 from arro3.core.types import ArrowArrayExportable, ArrowStreamExportable
 from deltalake import CommitProperties, DeltaTable, WriterProperties
 from deltalake.table import FilterLiteralType, TableMerger
@@ -11,7 +9,6 @@ from dagster_delta._handler.utils import create_predicate
 from dagster_delta.config import MergeConfig, MergeOperationsConfig, MergeType
 
 T = TypeVar("T")
-ArrowTypes = Union[pa.Table, pa.RecordBatchReader, ds.Dataset]
 
 
 def merge_execute(
