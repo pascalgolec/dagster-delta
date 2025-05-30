@@ -3,12 +3,10 @@ from dagster_delta.io_manager.base import (
     BaseDeltaLakeIOManager,
     SchemaMode,
     WriteMode,
-    WriterEngine,
 )
 
 __all__ = [
     "WriteMode",
-    "WriterEngine",
     "SchemaMode",
     "BaseDeltaLakeIOManager",
     "DeltaLakePyarrowIOManager",

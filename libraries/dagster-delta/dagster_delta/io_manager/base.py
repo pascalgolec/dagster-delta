@@ -69,23 +69,14 @@ class SchemaMode(str, Enum):
     merge = "merge"
 
 
-class WriterEngine(str, Enum):
-    """Writer engine for delta writer. Rust writer is experimental but long term supported."""
-
-    pyarrow = "pyarrow"
-    rust = "rust"
-
-
 class _DeltaTableIOManagerResourceConfig(TypedDict):
     root_uri: str
     mode: WriteMode
     schema_mode: NotRequired[SchemaMode]
-    writer_engine: WriterEngine
     merge_config: NotRequired[dict[str, Any]]
     storage_options: _StorageOptionsConfig
     client_options: NotRequired[dict[str, str]]
     table_config: NotRequired[dict[str, str]]
-    custom_metadata: NotRequired[dict[str, str]]
     writer_properties: NotRequired[dict[str, str]]
     commit_properties: NotRequired[dict[str, str]]
     parquet_read_options: NotRequired[dict[str, Any]]
@@ -152,10 +143,6 @@ class BaseDeltaLakeIOManager(ConfigurableIOManagerFactory):
         default=None,
         description="If set to 'overwrite', allows replacing the schema of the table. Set to 'merge' to merge with existing schema.",
     )
-    writer_engine: WriterEngine = Field(  # type: ignore
-        default=WriterEngine.rust.value,
-        description="Engine passed to write_deltalake.",
-    )
 
     merge_config: Optional[MergeConfig] = Field(
         default=None,
@@ -182,11 +169,6 @@ class BaseDeltaLakeIOManager(ConfigurableIOManagerFactory):
         alias="schema",
         description="Name of the schema to use.",
     )  # schema is a reserved word for pydantic
-
-    custom_metadata: Optional[dict[str, str]] = Field(
-        default=None,
-        description="Custom metadata that is added to transaction commit.",
-    )
     writer_properties: Optional[dict[str, str]] = Field(
         default=None,
         description="Writer properties passed to the rust engine writer.",

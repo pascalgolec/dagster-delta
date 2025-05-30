@@ -37,7 +37,7 @@ def a_df2(context: OpExecutionContext) -> pa.Table:
 
 
 @op(out=Out(metadata={"schema": "add_one2"}))
-def add_one2(context: OpExecutionContext, df: pa.Table):  # noqa: ANN201
+def add_one2(context: OpExecutionContext, df: pa.RecordBatchReader):  # noqa: ANN201
     context.add_output_metadata(
         {
             "merge_predicate": "s.a = t.a",
@@ -48,7 +48,7 @@ def add_one2(context: OpExecutionContext, df: pa.Table):  # noqa: ANN201
         },
     )
 
-    return df.set_column(0, "a", pa.array([2, 3, 4]))
+    return df.read_all().set_column(0, "a", pa.array([2, 3, 4]))
 
 
 @graph

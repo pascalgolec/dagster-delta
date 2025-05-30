@@ -1,7 +1,12 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from deltalake.table import FilterLiteralType
+
+from dagster_delta.io_manager.base import (
+    DELTA_DATE_FORMAT,
+    DELTA_DATETIME_FORMAT,
+)
 
 
 def create_predicate(
@@ -18,10 +23,10 @@ def create_predicate(
             value = f"'{value}'"
         elif isinstance(value, list):
             value = str(tuple(v for v in value))
+        elif isinstance(value, date):
+            value = f"'{value.strftime(DELTA_DATE_FORMAT)}'"
         elif isinstance(value, datetime):
-            value = str(
-                int(value.timestamp() * 1000 * 1000),
-            )  # convert to microseconds
+            value = f"'{value.strftime(DELTA_DATETIME_FORMAT)}'"
         partition_predicates.append(f"{column} {part_filter[1]} {value}")
 
     return " AND ".join(partition_predicates)

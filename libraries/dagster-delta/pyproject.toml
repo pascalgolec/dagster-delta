@@ -1,12 +1,12 @@
 [project]
 name = "dagster-delta"
-version = "0.4.1"
+version = "0.5.0"
 description = "Deltalake IO Managers for Dagster with pyarrow and Polars support."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "dagster>=1.8,<2.0",
-    "deltalake>=0.24",
+    "deltalake>=1.0.0",
     "pendulum>=3.0.0",
 ]
 authors = [{name = "Ion Koutsouris"}]
@@ -22,7 +22,7 @@ keywords = ["dagster", "deltalake", "delta","datalake", "io manager", "polars", 
 
 [project.optional-dependencies]
 polars = [
-    "polars"
+    "polars>=1.31.0"
 ]
 
 [build-system]

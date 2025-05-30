@@ -86,6 +86,7 @@ def b_df_lazy() -> pl.LazyFrame:
 
 @asset(key_prefix=["my_schema"])
 def b_plus_one_lazy(b_df_lazy: pl.LazyFrame) -> pl.LazyFrame:
+    print(b_df_lazy.collect_schema)
     return b_df_lazy.select(pl.all() + 1)
 
 
