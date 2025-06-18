@@ -9,16 +9,10 @@ from deltalake.schema import Field as DeltaField
 from deltalake.schema import PrimitiveType, Schema
 from deltalake.table import FilterLiteralType
 
-from dagster_delta.io_manager.base import (
-    DELTA_DATE_FORMAT,
-    DELTA_DATETIME_FORMAT,
-)
-
 
 def partition_dimensions_to_dnf(
     partition_dimensions: Iterable[TablePartitionDimension],
     table_schema: Schema,
-    str_values: bool = False,
     input_dnf: bool = False,  # during input we want to read a range when it's (un)-partitioned
     date_format: Optional[dict[str, str]] = None,
 ) -> Optional[list[FilterLiteralType]]:
@@ -36,7 +30,6 @@ def partition_dimensions_to_dnf(
                 filter_ = _time_window_partition_dnf(
                     partition_dimension,
                     field.type.type,
-                    str_values,
                     input_dnf,
                 )
                 if isinstance(filter_, list):
@@ -112,7 +105,6 @@ def _value_dnf(
 def _time_window_partition_dnf(
     table_partition: TablePartitionDimension,
     data_type: str,
-    str_values: bool,
     input_dnf: bool,
 ) -> Union[FilterLiteralType, list[FilterLiteralType]]:
     if isinstance(table_partition.partitions, list):
@@ -124,19 +116,11 @@ def _time_window_partition_dnf(
         start_dt, end_dt = partition
         start_dt, end_dt = start_dt.replace(tzinfo=None), end_dt.replace(tzinfo=None)
 
-    if str_values:
-        if data_type == "timestamp":
-            start_dt, end_dt = (
-                start_dt.strftime(DELTA_DATETIME_FORMAT),
-                end_dt.strftime(DELTA_DATETIME_FORMAT),
-            )
-        elif data_type == "date":
-            start_dt, end_dt = (
-                start_dt.strftime(DELTA_DATE_FORMAT),
-                end_dt.strftime(DELTA_DATE_FORMAT),
-            )
-        else:
-            raise ValueError(f"Unknown primitive type: {data_type}")
+    if data_type == "date":
+        start_dt, end_dt = (
+            start_dt.date(),
+            end_dt.date(),
+        )
 
     if input_dnf:
         return [

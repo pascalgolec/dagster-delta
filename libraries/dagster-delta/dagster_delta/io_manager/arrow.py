@@ -1,9 +1,9 @@
 from collections.abc import Sequence
-from typing import Any
+from typing import Union
 
 import dagster as dg
-import pyarrow as pa
-import pyarrow.dataset as ds
+from arro3.core import RecordBatchReader, Table
+from arro3.core.types import ArrowArrayExportable, ArrowStreamExportable
 from dagster._core.storage.db_io_manager import DbTypeHandler
 
 from dagster_delta._handler.base import ArrowTypes, DeltalakeBaseArrowTypeHandler
@@ -19,17 +19,34 @@ class DeltaLakePyarrowIOManager(BaseDeltaLakeIOManager):  # noqa: D101
 
 
 class _DeltaLakePyArrowTypeHandler(DeltalakeBaseArrowTypeHandler[ArrowTypes]):  # noqa: D101
-    def from_arrow(self, obj: pa.RecordBatchReader, target_type: type[ArrowTypes]) -> ArrowTypes:  # noqa: D102
-        if target_type == pa.Table:
-            return obj.read_all()
-        return obj
+    def from_arrow(
+        self,
+        obj: Union[ArrowStreamExportable, ArrowArrayExportable],
+        target_type: type[ArrowTypes],  # type: ignore
+    ) -> ArrowTypes:  # noqa: D102 # type: ignore
+        data = RecordBatchReader.from_arrow(obj)
 
-    def to_arrow(self, obj: ArrowTypes) -> tuple[ArrowTypes, dict[str, Any]]:  # noqa: D102
-        if isinstance(obj, ds.Dataset):
-            return obj.scanner().to_reader(), {}
-        return obj, {}
+        if target_type == Table:
+            return data.read_all()
 
-    def get_output_stats(self, obj: ArrowTypes) -> dict[str, dg.MetadataValue]:  # noqa: ARG002
+        try:
+            import pyarrow as pa
+
+            if target_type == pa.Table:
+                return pa.table(data)
+            elif target_type == pa.RecordBatchReader:
+                return pa.RecordBatchReader.from_stream(data)
+        except ImportError:
+            pass
+        return data
+
+    def to_arrow(
+        self,
+        obj: Union[ArrowStreamExportable, ArrowArrayExportable],
+    ) -> ArrowStreamExportable:  # noqa: D102
+        return RecordBatchReader.from_arrow(obj)
+
+    def get_output_stats(self, obj: ArrowTypes) -> dict[str, dg.MetadataValue]:  # noqa: ARG002 # type: ignore
         """Returns output stats to be attached to the the context.
 
         Args:
@@ -43,4 +60,12 @@ class _DeltaLakePyArrowTypeHandler(DeltalakeBaseArrowTypeHandler[ArrowTypes]):  
     @property
     def supported_types(self) -> Sequence[type[object]]:
         """Returns the supported dtypes for this typeHandler"""
-        return [pa.Table, pa.RecordBatchReader, ds.Dataset]
+        supported_types = [Table, RecordBatchReader]
+        try:
+            import pyarrow as pa
+
+            supported_types.extend([pa.Table, pa.RecordBatchReader])
+        except ImportError:
+            pass
+
+        return supported_types

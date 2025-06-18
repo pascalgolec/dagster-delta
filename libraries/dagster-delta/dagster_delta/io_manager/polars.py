@@ -1,6 +1,14 @@
 import logging
 from collections.abc import Sequence
-from typing import Any, Optional, Union
+from typing import Optional, Union
+
+from deltalake import DeltaTable
+
+from dagster_delta._handler.utils import (
+    create_predicate,
+    extract_date_format_from_partition_definition,
+    partition_dimensions_to_dnf,
+)
 
 try:
     import polars as pl
@@ -8,8 +16,7 @@ except ImportError as e:
     raise ImportError(
         "Please install dagster-delta[polars]",
     ) from e
-import pyarrow as pa
-import pyarrow.dataset as ds
+from arro3.core import RecordBatchReader, Table
 from dagster import InputContext, MetadataValue, OutputContext
 from dagster._core.storage.db_io_manager import (
     DbTypeHandler,
@@ -19,7 +26,6 @@ from dagster._core.storage.db_io_manager import (
 from dagster_delta._handler.base import (
     DeltalakeBaseArrowTypeHandler,
 )
-from dagster_delta._handler.utils import extract_date_format_from_partition_definition, read_table
 from dagster_delta.io_manager.arrow import _DeltaLakePyArrowTypeHandler
 from dagster_delta.io_manager.base import BaseDeltaLakeIOManager, TableConnection
 
@@ -29,21 +35,12 @@ PolarsTypes = Union[pl.DataFrame, pl.LazyFrame]
 class _DeltaLakePolarsTypeHandler(DeltalakeBaseArrowTypeHandler[PolarsTypes]):  # noqa: D101
     def from_arrow(  # noqa: D102
         self,
-        obj: Union[ds.Dataset, pa.RecordBatchReader],
+        obj: Union[RecordBatchReader, Table],
         target_type: type[PolarsTypes],
     ) -> PolarsTypes:
-        if isinstance(obj, pa.RecordBatchReader):
-            return pl.DataFrame(obj.read_all())
-        elif isinstance(obj, ds.Dataset):
-            df = pl.scan_pyarrow_dataset(obj)
-            if target_type == pl.DataFrame:
-                return df.collect()
-            else:
-                return df
-        else:
-            raise NotImplementedError("Unsupported objected passed of type:  %s", type(obj))
+        raise NotImplementedError
 
-    def to_arrow(self, obj: PolarsTypes) -> tuple[pa.Table, dict[str, Any]]:  # noqa: D102
+    def to_arrow(self, obj: PolarsTypes) -> RecordBatchReader:  # noqa: D102
         if isinstance(obj, pl.LazyFrame):
             obj = obj.collect()
 
@@ -52,7 +49,7 @@ class _DeltaLakePolarsTypeHandler(DeltalakeBaseArrowTypeHandler[PolarsTypes]):  
         logger.debug("shape of dataframe: %s", obj.shape)
         # TODO(ion): maybe move stats collection here
 
-        return obj.to_arrow(), {"large_dtypes": True}
+        return RecordBatchReader.from_arrow(obj)
 
     def load_input(
         self,
@@ -64,35 +61,44 @@ class _DeltaLakePolarsTypeHandler(DeltalakeBaseArrowTypeHandler[PolarsTypes]):  
         definition_metadata = (
             context.definition_metadata if context.definition_metadata is not None else {}
         )
-        date_format = extract_date_format_from_partition_definition(context)
-
-        parquet_read_options = None
-        if context.resource_config is not None:
-            parquet_read_options = context.resource_config.get("parquet_read_options", None)
-            parquet_read_options = (
-                ds.ParquetReadOptions(**parquet_read_options)
-                if parquet_read_options is not None
-                else None
-            )
-
-        dataset = read_table(
-            table_slice,
-            connection,
-            version=definition_metadata.get("table_version"),
-            date_format=date_format,
-            parquet_read_options=parquet_read_options,
+        version = definition_metadata.get("table_version")
+        table = DeltaTable(
+            table_uri=connection.table_uri,
+            storage_options=connection.storage_options,
+            version=version,
         )
 
-        if table_slice.columns is not None:
-            if context.dagster_type.typing_type == pl.LazyFrame:
-                return self.from_arrow(dataset, context.dagster_type.typing_type).select(
-                    table_slice.columns,
-                )
-            else:
-                scanner = dataset.scanner(columns=table_slice.columns)
-                return self.from_arrow(scanner.to_reader(), context.dagster_type.typing_type)
+        date_format = extract_date_format_from_partition_definition(context)
+        logger = logging.getLogger()
+        logger.setLevel("DEBUG")
+
+        predicate = None
+        if table_slice.partition_dimensions is not None:
+            partition_filters = partition_dimensions_to_dnf(
+                partition_dimensions=table_slice.partition_dimensions,
+                table_schema=table.schema(),
+                input_dnf=True,
+                date_format=date_format,
+            )
+            if partition_filters is not None:
+                ## Convert partition_filter to predicate
+                predicate = create_predicate(partition_filters)
+
+                logger.debug("Dataset input predicate %s", predicate)
+
+        col_select = ",".join(table_slice.columns) if table_slice.columns is not None else "*"
+        query = f"SELECT {col_select} FROM tbl"
+        if predicate is not None:
+            query = f"{query} WHERE {predicate}"
+
+        logger.info("using query: %s", query)
+
+        df = pl.scan_delta(table).sql(query=query, table_name="tbl")
+
+        if context.dagster_type.typing_type == pl.LazyFrame:
+            return df
         else:
-            return self.from_arrow(dataset, context.dagster_type.typing_type)
+            return df.collect()
 
     def handle_output(
         self,

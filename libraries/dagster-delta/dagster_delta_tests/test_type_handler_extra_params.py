@@ -9,7 +9,7 @@ from dagster import (
 )
 from deltalake import DeltaTable
 
-from dagster_delta import DeltaLakePyarrowIOManager, LocalConfig, WriterEngine
+from dagster_delta import DeltaLakePyarrowIOManager, LocalConfig
 
 
 @pytest.fixture
@@ -17,7 +17,6 @@ def io_manager(tmp_path) -> DeltaLakePyarrowIOManager:
     return DeltaLakePyarrowIOManager(
         root_uri=str(tmp_path),
         storage_options=LocalConfig(),
-        writer_engine=WriterEngine.rust,
     )
 
 

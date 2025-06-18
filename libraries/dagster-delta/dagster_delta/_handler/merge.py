@@ -1,8 +1,7 @@
 import logging
 from typing import Any, Optional, TypeVar, Union
 
-import pyarrow as pa
-import pyarrow.dataset as ds
+from arro3.core.types import ArrowArrayExportable, ArrowStreamExportable
 from deltalake import CommitProperties, DeltaTable, WriterProperties
 from deltalake.table import FilterLiteralType, TableMerger
 
@@ -10,17 +9,14 @@ from dagster_delta._handler.utils import create_predicate
 from dagster_delta.config import MergeConfig, MergeOperationsConfig, MergeType
 
 T = TypeVar("T")
-ArrowTypes = Union[pa.Table, pa.RecordBatchReader, ds.Dataset]
 
 
 def merge_execute(
     dt: DeltaTable,
-    data: Union[pa.RecordBatchReader, pa.Table],
+    data: Union[ArrowStreamExportable, ArrowArrayExportable],
     merge_config: MergeConfig,
     writer_properties: Optional[WriterProperties],
     commit_properties: Optional[CommitProperties],
-    custom_metadata: Optional[dict[str, str]],
-    delta_params: dict[str, Any],
     merge_predicate_from_metadata: Optional[str],
     merge_operations_config: Optional[MergeOperationsConfig],
     partition_filters: Optional[list[FilterLiteralType]] = None,
@@ -53,8 +49,6 @@ def merge_execute(
         error_on_type_mismatch=error_on_type_mismatch,
         writer_properties=writer_properties,
         commit_properties=commit_properties,
-        custom_metadata=custom_metadata,
-        **delta_params,
     )
 
     if merge_type == MergeType.update_only:

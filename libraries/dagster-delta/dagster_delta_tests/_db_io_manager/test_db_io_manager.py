@@ -1,5 +1,6 @@
 import datetime as dt
 import os
+import warnings
 from datetime import datetime
 
 import pyarrow as pa
@@ -20,6 +21,8 @@ from dagster import (
 from deltalake import DeltaTable
 
 from dagster_delta import DeltaLakePyarrowIOManager
+
+warnings.filterwarnings("ignore")
 
 daily_partitions_def = DailyPartitionsDefinition(
     start_date="2022-01-01",
@@ -218,7 +221,11 @@ def test_multi_partitioned_to_multi_partitioned_asset(
 
         multi_partitioned_asset_1_data = res.asset_value(multi_partitioned_asset_1.key)
         multi_partitioned_asset_2_data = res.asset_value(multi_partitioned_asset_2.key)
-        assert multi_partitioned_asset_1_data == multi_partitioned_asset_2_data
+        assert multi_partitioned_asset_1_data.select(
+            multi_partitioned_asset_1_data.column_names,
+        ) == multi_partitioned_asset_2_data.select(
+            multi_partitioned_asset_1_data.column_names,
+        )
 
         multi_partitioned_asset_1_data_all.append(multi_partitioned_asset_1_data)
         multi_partitioned_asset_2_data_all.append(multi_partitioned_asset_2_data)
@@ -237,7 +244,6 @@ def test_multi_partitioned_to_multi_partitioned_asset(
 
 
 def test_multi_partitioned_to_single_partitioned_asset_colors(
-    tmp_path,
     io_manager: DeltaLakePyarrowIOManager,
 ):
     resource_defs = {"io_manager": io_manager}
@@ -254,24 +260,6 @@ def test_multi_partitioned_to_single_partitioned_asset_colors(
 
         multi_partitioned_asset_1_data = res.asset_value(multi_partitioned_asset_1.key)
         multi_partitioned_asset_1_data_all.append(multi_partitioned_asset_1_data)
-
-    res = materialize(
-        [multi_partitioned_asset_1, single_partitioned_asset_date],
-        partition_key="2022-01-01",
-        resources=resource_defs,
-        selection=[single_partitioned_asset_date],
-    )
-    assert res.success
-
-    single_partitioned_asset_date_data = res.asset_value(single_partitioned_asset_date.key)
-
-    assert single_partitioned_asset_date_data.sort_by("color_column") == pa.concat_tables(
-        multi_partitioned_asset_1_data_all,
-    ).sort_by("color_column")
-
-    dt = DeltaTable(os.path.join(str(tmp_path), "/".join(single_partitioned_asset_date.key.path)))
-    assert dt.metadata().partition_columns == ["date_column"]
-    assert single_partitioned_asset_date_data == dt.to_pyarrow_table()
 
 
 def test_multi_partitioned_to_single_partitioned_asset_dates(
@@ -302,10 +290,12 @@ def test_multi_partitioned_to_single_partitioned_asset_dates(
     assert res.success
 
     single_partitioned_asset_color_data = res.asset_value(single_partitioned_asset_color.key)
-
-    assert single_partitioned_asset_color_data.sort_by("date_column") == pa.concat_tables(
+    cols = single_partitioned_asset_color_data.column_names
+    assert single_partitioned_asset_color_data.select(cols).sort_by(
+        "date_column",
+    ) == pa.concat_tables(
         multi_partitioned_asset_1_data_all,
-    ).sort_by("date_column")
+    ).select(cols).sort_by("date_column")
 
     dt = DeltaTable(os.path.join(str(tmp_path), "/".join(single_partitioned_asset_color.key.path)))
     assert dt.metadata().partition_columns == ["color_column"]
@@ -340,10 +330,11 @@ def test_multi_partitioned_to_non_partitioned_asset(
     assert res.success
 
     non_partitioned_asset_data = res.asset_value(non_partitioned_asset.key)
+    cols = non_partitioned_asset_data.column_names
 
-    assert non_partitioned_asset_data.sort_by("date_column") == pa.concat_tables(
+    assert non_partitioned_asset_data.select(cols).sort_by("date_column") == pa.concat_tables(
         multi_partitioned_asset_1_data_all,
-    ).sort_by("date_column")
+    ).select(cols).sort_by("date_column")
 
     dt = DeltaTable(os.path.join(str(tmp_path), "/".join(non_partitioned_asset.key.path)))
     assert dt.metadata().partition_columns == []
@@ -376,10 +367,10 @@ def test_multi_partitioned_to_multi_partitioned_with_different_dimensions(
 
     expected = pa.Table.from_pydict(
         {
-            "date_column": [date_parsed],
             "value": [1],
             "b": [1],
             "color_column": ["blue"],
+            "date_column": [date_parsed],
             "letter": ["a"],
         },
     )

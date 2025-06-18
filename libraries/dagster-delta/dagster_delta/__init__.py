@@ -21,7 +21,6 @@ from dagster_delta.io_manager.base import (
     BaseDeltaLakeIOManager,
     SchemaMode,
     WriteMode,
-    WriterEngine,
 )
 from dagster_delta.resources import DeltaTableResource
 
@@ -35,7 +34,6 @@ __all__ = [
     "MergeConfig",
     "MergeType",
     "WriteMode",
-    "WriterEngine",
     "SchemaMode",
     "DeltaTableResource",
     "BaseDeltaLakeIOManager",

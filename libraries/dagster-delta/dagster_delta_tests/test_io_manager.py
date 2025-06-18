@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import date, datetime
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -40,8 +40,8 @@ def test_partition_dimensions_to_dnf(test_schema) -> None:
             partition_expr="timestamp_col",
         ),
     ]
-    dnf = partition_dimensions_to_dnf(parts, test_schema, True)
-    assert dnf == [("timestamp_col", "=", "2020-01-02 00:00:00")]
+    dnf = partition_dimensions_to_dnf(parts, test_schema)
+    assert dnf == [("timestamp_col", "=", datetime(2020, 1, 2, 0, 0, 0))]
 
     parts = [
         TablePartitionDimension(
@@ -49,8 +49,8 @@ def test_partition_dimensions_to_dnf(test_schema) -> None:
             partition_expr="date_col",
         ),
     ]
-    dnf = partition_dimensions_to_dnf(parts, test_schema, True)
-    assert dnf == [("date_col", "=", "2020-01-02")]
+    dnf = partition_dimensions_to_dnf(parts, test_schema)
+    assert dnf == [("date_col", "=", date(2020, 1, 2))]
 
 
 @op(out=Out(metadata={"schema": "a_df"}))
