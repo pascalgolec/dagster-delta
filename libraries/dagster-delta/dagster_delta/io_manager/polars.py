@@ -93,8 +93,7 @@ class _DeltaLakePolarsTypeHandler(DeltalakeBaseArrowTypeHandler[PolarsTypes]):  
 
         logger.info("using query: %s", query)
 
-        # use delta pyarrow reader instead of polars reader
-        df = pl.scan_pyarrow_dataset(table.to_pyarrow_dataset()).sql(query=query, table_name="tbl")
+        df = pl.scan_delta(table, storage_options=connection.storage_options).sql(query=query, table_name="tbl")
 
         if context.dagster_type.typing_type == pl.LazyFrame:
             return df
